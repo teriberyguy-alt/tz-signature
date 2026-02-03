@@ -2,6 +2,7 @@ import io
 import os
 import requests
 import textwrap
+import time  # Added for retry delay
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
@@ -17,30 +18,41 @@ def generate_signature():
     countdown_str = ""
     try:
         tz_url = 'https://d2runewizard.com/api/terror-zone'
-        response = requests.get(tz_url, timeout=10)
-        response.raise_for_status()
         
-        data = response.json()
-        
-        current_zone = data.get('currentTerrorZone', {}).get('zone', 'Unknown')
-        next_zone = data.get('nextTerrorZone', {}).get('zone', 'Unknown')
-        
-        now_text = f"Now: {current_zone}"
-        next_text = f"Next: {next_zone}"
-        
-        now_lines = textwrap.wrap(now_text, width=35)
-        next_lines = textwrap.wrap(next_text, width=35)
-        
-        # Countdown calculation (UTC, on the hour flip)
-        now_dt = datetime.utcnow()
-        seconds_to_next = (60 - now_dt.minute) * 60 - now_dt.second
-        if seconds_to_next < 0:
-            seconds_to_next = 0
-        minutes = seconds_to_next // 60
-        seconds = seconds_to_next % 60
-        countdown_str = f"{minutes} min, {seconds:02d} sec until"  # Shortened for better fit
-    except Exception as e:
-        now_lines = [f"TZ fetch error: {str(e)[:60]}"]
+        # Retry logic: try twice if first fails
+        for attempt in range(2):
+            try:
+                response = requests.get(tz_url, timeout=15)  # Increased timeout
+                response.raise_for_status()
+                data = response.json()
+                
+                current_zone = data.get('currentTerrorZone', {}).get('zone', 'Unknown')
+                next_zone = data.get('nextTerrorZone', {}).get('zone', 'Unknown')
+                
+                now_text = f"Now: {current_zone}"
+                next_text = f"Next: {next_zone}"
+                
+                now_lines = textwrap.wrap(now_text, width=35)
+                next_lines = textwrap.wrap(next_text, width=35)
+                
+                # Countdown calculation (UTC, on the hour flip)
+                now_dt = datetime.utcnow()
+                seconds_to_next = (60 - now_dt.minute) * 60 - now_dt.second
+                if seconds_to_next < 0:
+                    seconds_to_next = 0
+                minutes = seconds_to_next // 60
+                seconds = seconds_to_next % 60
+                countdown_str = f"{minutes} min, {seconds:02d} sec until"
+                
+                break  # Success, no need for retry
+            except requests.exceptions.RequestException:
+                if attempt == 1:
+                    raise  # Both attempts failed
+                time.sleep(1)  # Wait 1s before retry
+    except Exception:
+        # Clean fallback message instead of raw error
+        now_lines = ["TZ Fetch Slow"]
+        next_lines = ["Refresh in a few sec"]
 
     try:
         bg_path = os.path.join(BASE_DIR, 'bg.jpg')
