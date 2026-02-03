@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/signature.png",
+      "destination": "/api/signature"
+    }
+  ]
+}
