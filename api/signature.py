@@ -63,15 +63,9 @@ def generate_signature():
         draw = ImageDraw.Draw(bg_image)
         font = ImageFont.truetype(font_path, 12)
         timer_font = ImageFont.truetype(font_path, 13)
-        title_font = ImageFont.truetype(font_path, 16)  # Larger for title
-        
-        # Title at top
-        title_text = "TERROR ZONES"
-        draw.text((11, 21), title_text, font=title_font, fill=(0, 0, 0))     # Black shadow
-        draw.text((10, 20), title_text, font=title_font, fill=(200, 0, 0))   # Red main
         
         x = 10
-        y = 50  # Adjusted down for title room
+        y = 55          # Back to original starting y (no title room needed)
         line_spacing = 15
         
         # Shadow helper function
