@@ -2,7 +2,7 @@ import io
 import os
 import requests
 import textwrap
-import time  # Added for retry delay
+import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
@@ -19,10 +19,9 @@ def generate_signature():
     try:
         tz_url = 'https://d2runewizard.com/api/terror-zone'
         
-        # Retry logic: try twice if first fails
         for attempt in range(2):
             try:
-                response = requests.get(tz_url, timeout=15)  # Increased timeout
+                response = requests.get(tz_url, timeout=15)
                 response.raise_for_status()
                 data = response.json()
                 
@@ -35,22 +34,24 @@ def generate_signature():
                 now_lines = textwrap.wrap(now_text, width=35)
                 next_lines = textwrap.wrap(next_text, width=35)
                 
-                # Countdown calculation (UTC, on the hour flip)
                 now_dt = datetime.utcnow()
                 seconds_to_next = (60 - now_dt.minute) * 60 - now_dt.second
                 if seconds_to_next < 0:
                     seconds_to_next = 0
                 minutes = seconds_to_next // 60
                 seconds = seconds_to_next % 60
-                countdown_str = f"{minutes} min, {seconds:02d} sec until"
                 
-                break  # Success, no need for retry
+                if minutes == 0:
+                    countdown_str = f"{seconds} seconds until"
+                else:
+                    countdown_str = f"{minutes} min, {seconds:02d} sec until"
+                
+                break
             except requests.exceptions.RequestException:
                 if attempt == 1:
-                    raise  # Both attempts failed
-                time.sleep(1)  # Wait 1s before retry
+                    raise
+                time.sleep(1)
     except Exception:
-        # Clean fallback message instead of raw error
         now_lines = ["TZ Fetch Slow"]
         next_lines = ["Refresh in a few sec"]
 
@@ -61,26 +62,37 @@ def generate_signature():
         bg_image = Image.open(bg_path).convert('RGBA')
         draw = ImageDraw.Draw(bg_image)
         font = ImageFont.truetype(font_path, 12)
-        timer_font = ImageFont.truetype(font_path, 13)  # Slightly larger for emphasis
+        timer_font = ImageFont.truetype(font_path, 13)
+        title_font = ImageFont.truetype(font_path, 16)  # Larger for title
+        
+        # Title at top
+        title_text = "TERROR ZONES"
+        draw.text((11, 21), title_text, font=title_font, fill=(0, 0, 0))     # Black shadow
+        draw.text((10, 20), title_text, font=title_font, fill=(200, 0, 0))   # Red main
         
         x = 10
-        y = 55          # Start a bit higher to give more room
-        line_spacing = 15  # Increased for breathing room
+        y = 50  # Adjusted down for title room
+        line_spacing = 15
         
-        # Draw "Now" lines
+        # Shadow helper function
+        def draw_with_shadow(text, px, py, fnt, color):
+            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))  # Shadow
+            draw.text((px, py), text, font=fnt, fill=color)          # Main
+        
+        # Draw "Now" lines with shadow
         for line in now_lines:
-            draw.text((x, y), line, font=font, fill=(255, 255, 255))
+            draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
         
-        # Draw countdown (gold, extra spacing)
+        # Countdown with shadow + gold
         if countdown_str:
-            y += 6   # Gap after "Now"
-            draw.text((x + 5, y), countdown_str, font=timer_font, fill=(255, 215, 0))  # Slight indent
-            y += line_spacing + 4  # Bigger gap before "Next"
+            y += 6
+            draw_with_shadow(countdown_str, x + 5, y, timer_font, (255, 215, 0))
+            y += line_spacing + 4
         
-        # Draw "Next" lines
+        # Draw "Next" lines with shadow
         for line in next_lines:
-            draw.text((x, y), line, font=font, fill=(255, 255, 255))
+            draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
         
         img_bytes = io.BytesIO()
