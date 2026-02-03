@@ -31,14 +31,14 @@ def generate_signature():
         now_lines = textwrap.wrap(now_text, width=35)
         next_lines = textwrap.wrap(next_text, width=35)
         
-        # Countdown: seconds until next full hour (UTC)
+        # Countdown: full "minutes, seconds until" format
         now_dt = datetime.utcnow()
         seconds_to_next = (60 - now_dt.minute) * 60 - now_dt.second
-        if seconds_to_next < 0:  # Rare edge case
+        if seconds_to_next < 0:
             seconds_to_next = 0
         minutes = seconds_to_next // 60
         seconds = seconds_to_next % 60
-        countdown_str = f"{minutes:02d}:{seconds:02d} until"
+        countdown_str = f"{minutes} minutes, {seconds:02d} seconds until"
     except Exception as e:
         now_lines = [f"TZ fetch error: {str(e)[:60]}"]
 
@@ -51,7 +51,7 @@ def generate_signature():
         font = ImageFont.truetype(font_path, 12)
         
         x = 10
-        y = 60          # Starting y for "Now" (adjust if overlaps your name/logo)
+        y = 60          # Starting y for "Now"
         line_spacing = 14
         
         # Draw "Now" lines
@@ -59,9 +59,9 @@ def generate_signature():
             draw.text((x, y), line, font=font, fill=(255, 255, 255))
             y += line_spacing
         
-        # Draw countdown (gold, with a bit extra space above/below)
+        # Draw countdown in gold with spacing
         if countdown_str:
-            y += 4  # Small gap after "Now"
+            y += 4   # Small gap after "Now"
             draw.text((x, y), countdown_str, font=font, fill=(255, 215, 0))
             y += line_spacing + 2  # Gap before "Next"
         
