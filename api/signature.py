@@ -12,7 +12,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 @app.route('/signature.png')
 def generate_signature():
-    overlay_lines = ["TZ data unavailable"]
+    now_lines = ["TZ data unavailable"]
+    next_lines = []
     countdown_str = ""
     try:
         tz_url = 'https://d2runewizard.com/api/terror-zone'
@@ -27,19 +28,19 @@ def generate_signature():
         now_text = f"Now: {current_zone}"
         next_text = f"Next: {next_zone}"
         
-        wrapped_now = textwrap.wrap(now_text, width=35)
-        wrapped_next = textwrap.wrap(next_text, width=35)
+        now_lines = textwrap.wrap(now_text, width=35)
+        next_lines = textwrap.wrap(next_text, width=35)
         
-        overlay_lines = wrapped_now + wrapped_next
-        
-        # Calculate MM:SS until next hour (zones change on the hour)
-        now = datetime.utcnow()
-        seconds_to_next_hour = (60 - now.minute) * 60 - now.second
-        minutes = seconds_to_next_hour // 60
-        seconds = seconds_to_next_hour % 60
+        # Countdown: seconds until next full hour (UTC)
+        now_dt = datetime.utcnow()
+        seconds_to_next = (60 - now_dt.minute) * 60 - now_dt.second
+        if seconds_to_next < 0:  # Rare edge case
+            seconds_to_next = 0
+        minutes = seconds_to_next // 60
+        seconds = seconds_to_next % 60
         countdown_str = f"{minutes:02d}:{seconds:02d} until"
     except Exception as e:
-        overlay_lines = [f"TZ fetch error: {str(e)[:60]}"]
+        now_lines = [f"TZ fetch error: {str(e)[:60]}"]
 
     try:
         bg_path = os.path.join(BASE_DIR, 'bg.jpg')
@@ -50,17 +51,24 @@ def generate_signature():
         font = ImageFont.truetype(font_path, 12)
         
         x = 10
-        y = 60  # Start higher to fit countdown
+        y = 60          # Starting y for "Now" (adjust if overlaps your name/logo)
         line_spacing = 14
         
-        for line in overlay_lines:
+        # Draw "Now" lines
+        for line in now_lines:
             draw.text((x, y), line, font=font, fill=(255, 255, 255))
             y += line_spacing
         
-        # Add countdown line below the zones (or integrate if you prefer)
+        # Draw countdown (gold, with a bit extra space above/below)
         if countdown_str:
-            countdown_text = f"{countdown_str}"
-            draw.text((x, y + 5), countdown_text, font=font, fill=(255, 215, 0))  # Gold color for emphasis
+            y += 4  # Small gap after "Now"
+            draw.text((x, y), countdown_str, font=font, fill=(255, 215, 0))
+            y += line_spacing + 2  # Gap before "Next"
+        
+        # Draw "Next" lines
+        for line in next_lines:
+            draw.text((x, y), line, font=font, fill=(255, 255, 255))
+            y += line_spacing
         
         img_bytes = io.BytesIO()
         bg_image.save(img_bytes, format='PNG')
