@@ -31,14 +31,14 @@ def generate_signature():
         now_lines = textwrap.wrap(now_text, width=35)
         next_lines = textwrap.wrap(next_text, width=35)
         
-        # Countdown: full "minutes, seconds until" format
+        # Countdown calculation (UTC, on the hour flip)
         now_dt = datetime.utcnow()
         seconds_to_next = (60 - now_dt.minute) * 60 - now_dt.second
         if seconds_to_next < 0:
             seconds_to_next = 0
         minutes = seconds_to_next // 60
         seconds = seconds_to_next % 60
-        countdown_str = f"{minutes} minutes, {seconds:02d} seconds until"
+        countdown_str = f"{minutes} min, {seconds:02d} sec until"  # Shortened for better fit
     except Exception as e:
         now_lines = [f"TZ fetch error: {str(e)[:60]}"]
 
@@ -49,21 +49,22 @@ def generate_signature():
         bg_image = Image.open(bg_path).convert('RGBA')
         draw = ImageDraw.Draw(bg_image)
         font = ImageFont.truetype(font_path, 12)
+        timer_font = ImageFont.truetype(font_path, 13)  # Slightly larger for emphasis
         
         x = 10
-        y = 60          # Starting y for "Now"
-        line_spacing = 14
+        y = 55          # Start a bit higher to give more room
+        line_spacing = 15  # Increased for breathing room
         
         # Draw "Now" lines
         for line in now_lines:
             draw.text((x, y), line, font=font, fill=(255, 255, 255))
             y += line_spacing
         
-        # Draw countdown in gold with spacing
+        # Draw countdown (gold, extra spacing)
         if countdown_str:
-            y += 4   # Small gap after "Now"
-            draw.text((x, y), countdown_str, font=font, fill=(255, 215, 0))
-            y += line_spacing + 2  # Gap before "Next"
+            y += 6   # Gap after "Now"
+            draw.text((x + 5, y), countdown_str, font=timer_font, fill=(255, 215, 0))  # Slight indent
+            y += line_spacing + 4  # Bigger gap before "Next"
         
         # Draw "Next" lines
         for line in next_lines:
