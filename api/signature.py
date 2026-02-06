@@ -24,9 +24,9 @@ def generate_signature():
     }
 
     try:
-        tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'  # v1 + cache bust
+        tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'
 
-        for attempt in range(3):  # more retries
+        for attempt in range(3):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 if response.status_code != 200:
@@ -62,7 +62,7 @@ def generate_signature():
                 break
             except Exception as e:
                 if attempt == 2:
-                    now_lines = [f"Fetch error: {str(e)[:30]}"]
+                    now_lines = [f"Fetch err: {str(e)[:30]}"]
                     break
                 time.sleep(2)
     except Exception:
