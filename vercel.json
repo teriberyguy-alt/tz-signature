@@ -1,8 +1,6 @@
 {
   "rewrites": [
-    {
-      "source": "/signature.png",
-      "destination": "/api/signature"
-    }
+    { "source": "/avatar.gif", "destination": "/api/index.py" },
+    { "source": "/(.*)", "destination": "/api/index.py" }
   ]
 }
