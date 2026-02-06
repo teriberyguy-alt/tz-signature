@@ -12,23 +12,30 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def get_terror_zones():
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://d2runewizard.com/terror-zone-tracker',
+        'Origin': 'https://d2runewizard.com'
+    }
+
+    tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'
+
     try:
-        tz_url = 'https://d2runewizard.com/api/terror-zone'  # your original URL
-        
         for attempt in range(2):
             try:
-                response = requests.get(tz_url, timeout=15)
+                response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
                 data = response.json()
-                
+
                 current_zone = data.get('currentTerrorZone', {}).get('zone', 'PENDING')
                 next_zone = data.get('nextTerrorZone', {}).get('zone', 'PENDING')
-                
+
                 if current_zone == 'Unknown':
                     current_zone = 'PENDING'
                 if next_zone == 'Unknown':
                     next_zone = 'PENDING'
-                
+
                 return current_zone.upper(), next_zone.upper()
             except requests.exceptions.RequestException:
                 if attempt == 1:
@@ -47,8 +54,7 @@ def avatar():
     except:
         font = ImageFont.load_default()
 
-    # Wrap long names
-    wrapper = textwrap.TextWrapper(width=12)  # adjust if needed
+    wrapper = textwrap.TextWrapper(width=12)
     curr_lines = wrapper.wrap(current_zone)
     next_lines = wrapper.wrap(next_zone)
 
@@ -61,23 +67,23 @@ def avatar():
 
         draw.rectangle((0, 0, 63, 63), outline=(200, 40, 0), width=1)
 
-        y = 6  # start position
+        y = 6
 
         if i == 0:
-            # Frame 1: NOW + current zone (wrapped)
+            # NOW + current zone
             draw.text((4, y), "NOW:", fill=(255, 165, 0), font=font)
             y += 10
             for line in curr_lines:
                 draw.text((4, y), line, fill=(255, 255, 255), font=font)
                 y += 9
         elif i == 1:
-            # Frame 2: Timer
+            # TIME left
             mins = 60 - datetime.now().minute
             timer_text = f"{mins}M LEFT"
             draw.text((4, 12), timer_text, fill=(255, 215, 0), font=font)
             draw.text((4, 30), "TIME", fill=(220, 220, 150), font=font)
         else:
-            # Frame 3: NEXT + next zone (wrapped)
+            # NEXT + next zone
             draw.text((4, y), "NEXT:", fill=(200, 40, 0), font=font)
             y += 10
             for line in next_lines:
@@ -92,7 +98,7 @@ def avatar():
         format='GIF',
         save_all=True,
         append_images=frames[1:],
-        duration=1000,       # 1 second per frame = easier to read
+        duration=1000,  # 1 second pause per frame
         loop=0,
         optimize=True
     )
