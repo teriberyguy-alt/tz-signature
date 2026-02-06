@@ -16,13 +16,14 @@ def generate_signature():
     now_lines = ["TZ data unavailable"]
     next_lines = []
     countdown_str = ""
+
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
         }
         tz_url = 'https://d2emu.com/tz'
 
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
@@ -40,7 +41,7 @@ def generate_signature():
                         parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
                         if len(parts) >= 2:
                             zone_text = ' '.join(parts[1:])
-                            if zone_text:
+                            if zone_text and zone_text not in zone_candidates:
                                 zone_candidates.append(zone_text)
 
                 if zone_candidates:
@@ -67,10 +68,11 @@ def generate_signature():
                     countdown_str = f"{minutes} min, {seconds:02d} sec until"
 
                 break
-            except requests.exceptions.RequestException:
-                if attempt == 1:
-                    raise
-                time.sleep(1)
+            except Exception as e:
+                if attempt == 2:
+                    now_lines = [f"Fetch err: {str(e)[:30]}"]
+                    break
+                time.sleep(2)
     except Exception:
         now_lines = ["TZ Fetch Slow"]
         next_lines = ["Refresh in a few sec"]
