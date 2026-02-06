@@ -16,7 +16,7 @@ def generate_signature():
     now_lines = ["TZ data unavailable"]
     next_lines = []
     countdown_str = ""
-    
+
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
@@ -27,11 +27,11 @@ def generate_signature():
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
 
                 current_zone = 'PENDING'
                 next_zone = 'PENDING'
 
+                # Parse markdown table - robust version
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
@@ -39,7 +39,7 @@ def generate_signature():
                     if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped:
                         parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
                         if len(parts) >= 2:
-                            zone_text = ' '.join(parts[1:])
+                            zone_text = ' '.join(parts[1:]).strip()
                             if zone_text and zone_text not in zone_candidates:
                                 zone_candidates.append(zone_text)
 
