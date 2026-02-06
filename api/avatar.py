@@ -25,31 +25,45 @@ def get_terror_zones():
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
+                full_text = soup.get_text(separator=' ', strip=True).upper()
 
                 current_zone = 'PENDING'
                 next_zone = 'PENDING'
 
-                lines = response.text.splitlines()
-                zone_candidates = []
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped:
-                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
-                        if len(parts) >= 2:
-                            zone_text = ' '.join(parts[1:])
-                            if zone_text:
-                                zone_candidates.append(zone_text)
+                # Parse text if present
+                if "CURRENT TERROR ZONE:" in full_text:
+                    start = full_text.find("CURRENT TERROR ZONE:")
+                    snippet = full_text[start + len("CURRENT TERROR ZONE:"): start + 150]
+                    current_zone = snippet.split("NEXT TERROR ZONE:")[0].strip()
 
-                if zone_candidates:
-                    current_zone = zone_candidates[0]
-                    if len(zone_candidates) > 1:
-                        next_zone = ' '.join(zone_candidates[1:])
+                if "NEXT TERROR ZONE:" in full_text:
+                    start = full_text.find("NEXT TERROR ZONE:")
+                    snippet = full_text[start + len("NEXT TERROR ZONE:"): start + 150]
+                    next_zone = snippet.strip()
+
+                # Fallback to table if text not found
+                if current_zone == 'PENDING':
+                    lines = response.text.splitlines()
+                    zone_candidates = []
+                    for line in lines:
+                        stripped = line.strip()
+                        if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped:
+                            parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
+                            if len(parts) >= 2:
+                                zone_text = ' '.join(parts[1:])
+                                if zone_text:
+                                    zone_candidates.append(zone_text)
+
+                    if zone_candidates:
+                        current_zone = zone_candidates[0]
+                        if len(zone_candidates) > 1:
+                            next_zone = ' '.join(zone_candidates[1:])
 
                 return current_zone, next_zone
-            except Exception as e:
-                if attempt == 2:
-                    return f'ERR {response.status_code if "response" in locals() else "unknown"}', 'ERR'
-                time.sleep(2)
+            except requests.exceptions.RequestException:
+                if attempt == 1:
+                    return 'FETCH FAIL', 'FETCH FAIL'
+                time.sleep(1)
     except Exception:
         return 'FETCH ERROR', 'FETCH ERROR'
 
