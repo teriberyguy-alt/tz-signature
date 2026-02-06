@@ -29,7 +29,7 @@ def get_terror_zones():
                 current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Prioritize table parse
+                # Strict table parse - only |  | lines, skip immunities
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
@@ -46,17 +46,17 @@ def get_terror_zones():
                     if len(zone_candidates) > 1:
                         next_zone = ' '.join(zone_candidates[1:])
 
-                # Fallback to text labels if no table zones
+                # Text fallback if no table zones
                 full_text = soup.get_text(separator=' ', strip=True).upper()
                 if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
                     start = full_text.find("CURRENT TERROR ZONE:")
                     snippet = full_text[start + len("CURRENT TERROR ZONE:"): start + 150]
-                    current_zone = snippet.split("NEXT")[0].strip()
+                    current_zone = snippet.split("NEXT")[0].strip().upper()
 
                 if next_zone == 'PENDING' and "NEXT TERROR ZONE:" in full_text:
                     start = full_text.find("NEXT TERROR ZONE:")
                     snippet = full_text[start + len("NEXT TERROR ZONE:"): start + 150]
-                    next_zone = snippet.strip()
+                    next_zone = snippet.strip().upper()
 
                 return current_zone, next_zone
             except requests.exceptions.RequestException:
