@@ -24,20 +24,21 @@ def generate_signature():
     }
 
     try:
-        tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'
+        tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'  # v1 + cache bust
 
-        for attempt in range(2):
+        for attempt in range(3):  # more retries
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
-                response.raise_for_status()
+                if response.status_code != 200:
+                    raise requests.exceptions.HTTPError(f"Status {response.status_code}")
                 data = response.json()
 
                 current_zone = data.get('currentTerrorZone', {}).get('zone', 'Unknown')
                 next_zone = data.get('nextTerrorZone', {}).get('zone', 'Unknown')
 
-                if current_zone == 'Unknown' or not current_zone:
+                if current_zone == 'Unknown' or not current_zone.strip():
                     current_zone = 'REPORT PENDING'
-                if next_zone == 'Unknown' or not next_zone:
+                if next_zone == 'Unknown' or not next_zone.strip():
                     next_zone = 'PENDING'
 
                 now_text = f"Now: {current_zone.upper()}"
@@ -59,10 +60,11 @@ def generate_signature():
                     countdown_str = f"{minutes} min, {seconds:02d} sec until"
 
                 break
-            except requests.exceptions.RequestException:
-                if attempt == 1:
-                    raise
-                time.sleep(1)
+            except Exception as e:
+                if attempt == 2:
+                    now_lines = [f"Fetch error: {str(e)[:30]}"]
+                    break
+                time.sleep(2)
     except Exception:
         now_lines = ["TZ Fetch Slow"]
         next_lines = ["Refresh in a few sec"]
@@ -74,32 +76,25 @@ def generate_signature():
         bg_image = Image.open(bg_path).convert('RGBA')
         draw = ImageDraw.Draw(bg_image)
         font = ImageFont.truetype(font_path, 12)
-        title_font = ImageFont.truetype(font_path, 16)
         timer_font = ImageFont.truetype(font_path, 13)
-
-        # Title
-        def draw_with_shadow(text, px, py, fnt, color):
-            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
-            draw.text((px, py), text, font=fnt, fill=color)
-
-        draw_with_shadow("TERROR ZONES", 60, 8, title_font, (200, 40, 0))
 
         x = 10
         y = 55
         line_spacing = 15
 
-        # Now lines
+        def draw_with_shadow(text, px, py, fnt, color):
+            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
+            draw.text((px, py), text, font=fnt, fill=color)
+
         for line in now_lines:
             draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
 
-        # Countdown
         if countdown_str:
             y += 6
             draw_with_shadow(countdown_str, x + 5, y, timer_font, (255, 215, 0))
             y += line_spacing + 4
 
-        # Next lines
         for line in next_lines:
             draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
