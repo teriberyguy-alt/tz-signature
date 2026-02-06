@@ -22,7 +22,7 @@ def get_current_zone():
 
     for attempt in range(2):
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             data = response.json()
             zone = data.get('currentTerrorZone', {}).get('zone', 'Unknown')
@@ -46,7 +46,7 @@ def avatar():
         font = ImageFont.load_default()
 
     frames = []
-    bg_colors = [(0, 0, 0), (12, 0, 0), (24, 0, 0), (12, 0, 0)]  # gentle pulse
+    bg_colors = [(0, 0, 0), (12, 0, 0), (24, 0, 0), (12, 0, 0)]  # subtle pulse
 
     zone_short = zone[:11] + '..' if len(zone) > 11 else zone
 
@@ -54,23 +54,19 @@ def avatar():
         img = Image.new('RGB', (64, 64), bg_colors[i])
         draw = ImageDraw.Draw(img)
 
-        # Border
         draw.rectangle((0, 0, 63, 63), outline=(200, 40, 0), width=1)
 
         if i == 0:
-            # Current zone
             draw.text((4, 6), "TZ:", fill=(255, 165, 0), font=font)
             draw.text((4, 22), zone_short, fill=(255, 255, 255), font=font)
         elif i == 1:
-            # Timer
             mins = 60 - datetime.now().minute
             draw.text((4, 6), f"{mins}M", fill=(255, 215, 0), font=font)
             draw.text((4, 22), "LEFT", fill=(220, 220, 150), font=font)
         else:
-            # Simple indicator
             draw.text((4, 18), "LIVE", fill=(200, 40, 0), font=font)
 
-        # Flame dots for style
+        # Flame effect dots
         draw.point([(8 + i*3, 50), (12 + i*2, 52), (16 + i*3, 51)], fill=(255, 100, 0))
 
         frames.append(img)
