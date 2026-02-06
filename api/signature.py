@@ -27,11 +27,11 @@ def generate_signature():
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
-                full_text = soup.get_text(separator=' ', strip=True).upper()
 
                 current_zone = 'PENDING'
                 next_zone = 'PENDING'
 
+                # Parse markdown table
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
