@@ -25,39 +25,38 @@ def get_terror_zones():
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
-                full_text = soup.get_text(separator=' ', strip=True).upper()
 
-                current_zone = 'PENDING'
+                current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Parse text if present
-                if "CURRENT TERROR ZONE:" in full_text:
+                # Prioritize table parse
+                lines = response.text.splitlines()
+                zone_candidates = []
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped.startswith('|  |') and '---' not in stripped and 'immunities' not in stripped.lower():
+                        parts = stripped.split('|')
+                        if len(parts) >= 3:
+                            zone_text = parts[2].strip().upper()
+                            if zone_text:
+                                zone_candidates.append(zone_text)
+
+                if zone_candidates:
+                    current_zone = zone_candidates[0]
+                    if len(zone_candidates) > 1:
+                        next_zone = ' '.join(zone_candidates[1:])
+
+                # Fallback to text labels if no table zones
+                full_text = soup.get_text(separator=' ', strip=True).upper()
+                if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
                     start = full_text.find("CURRENT TERROR ZONE:")
                     snippet = full_text[start + len("CURRENT TERROR ZONE:"): start + 150]
-                    current_zone = snippet.split("NEXT TERROR ZONE:")[0].strip()
+                    current_zone = snippet.split("NEXT")[0].strip()
 
-                if "NEXT TERROR ZONE:" in full_text:
+                if next_zone == 'PENDING' and "NEXT TERROR ZONE:" in full_text:
                     start = full_text.find("NEXT TERROR ZONE:")
                     snippet = full_text[start + len("NEXT TERROR ZONE:"): start + 150]
                     next_zone = snippet.strip()
-
-                # Fallback to table if text not found
-                if current_zone == 'PENDING':
-                    lines = response.text.splitlines()
-                    zone_candidates = []
-                    for line in lines:
-                        stripped = line.strip()
-                        if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped:
-                            parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
-                            if len(parts) >= 2:
-                                zone_text = ' '.join(parts[1:])
-                                if zone_text:
-                                    zone_candidates.append(zone_text)
-
-                    if zone_candidates:
-                        current_zone = zone_candidates[0]
-                        if len(zone_candidates) > 1:
-                            next_zone = ' '.join(zone_candidates[1:])
 
                 return current_zone, next_zone
             except requests.exceptions.RequestException:
