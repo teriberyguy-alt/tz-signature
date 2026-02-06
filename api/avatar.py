@@ -13,7 +13,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def get_terror_zones():
     try:
-        tz_url = 'https://d2runewizard.com/api/terror-zone'  # your working URL
+        tz_url = 'https://d2runewizard.com/api/terror-zone'  # your original URL
         
         for attempt in range(2):
             try:
@@ -43,12 +43,12 @@ def avatar():
 
     font_path = os.path.join(BASE_DIR, 'font.ttf')
     try:
-        font = ImageFont.truetype(font_path, 8)  # slightly smaller for wrapping
+        font = ImageFont.truetype(font_path, 8)
     except:
         font = ImageFont.load_default()
 
     # Wrap long names
-    wrapper = textwrap.TextWrapper(width=12)  # fits ~10-12 chars per line
+    wrapper = textwrap.TextWrapper(width=12)  # adjust if needed
     curr_lines = wrapper.wrap(current_zone)
     next_lines = wrapper.wrap(next_zone)
 
@@ -61,10 +61,10 @@ def avatar():
 
         draw.rectangle((0, 0, 63, 63), outline=(200, 40, 0), width=1)
 
-        y = 6  # start higher to fit wrapped text
+        y = 6  # start position
 
         if i == 0:
-            # Frame 1: Current zone (wrapped)
+            # Frame 1: NOW + current zone (wrapped)
             draw.text((4, y), "NOW:", fill=(255, 165, 0), font=font)
             y += 10
             for line in curr_lines:
@@ -73,11 +73,11 @@ def avatar():
         elif i == 1:
             # Frame 2: Timer
             mins = 60 - datetime.now().minute
-            draw.text((4, y), f"{mins}M LEFT", fill=(255, 215, 0), font=font)
-            y += 12
-            draw.text((4, y), "TIMER", fill=(220, 220, 150), font=font)
+            timer_text = f"{mins}M LEFT"
+            draw.text((4, 12), timer_text, fill=(255, 215, 0), font=font)
+            draw.text((4, 30), "TIME", fill=(220, 220, 150), font=font)
         else:
-            # Frame 3: Next zone (wrapped)
+            # Frame 3: NEXT + next zone (wrapped)
             draw.text((4, y), "NEXT:", fill=(200, 40, 0), font=font)
             y += 10
             for line in next_lines:
@@ -92,7 +92,7 @@ def avatar():
         format='GIF',
         save_all=True,
         append_images=frames[1:],
-        duration=800,  # bit slower so text is readable
+        duration=1000,       # 1 second per frame = easier to read
         loop=0,
         optimize=True
     )
