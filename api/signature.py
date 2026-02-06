@@ -31,7 +31,7 @@ def generate_signature():
                 current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Extract zones from markdown table lines only
+                # 1. Parse table lines - strict to avoid immunities
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
@@ -40,7 +40,7 @@ def generate_signature():
                         parts = stripped.split('|')
                         if len(parts) >= 3:
                             zone_text = parts[2].strip().upper()
-                            if zone_text and zone_text != '---':
+                            if zone_text and zone_text != '---' and len(zone_text) > 3:  # avoid junk
                                 zone_candidates.append(zone_text)
 
                 if zone_candidates:
@@ -48,17 +48,17 @@ def generate_signature():
                     if len(zone_candidates) > 1:
                         next_zone = ' '.join(zone_candidates[1:])
 
-                # Fallback: if no table zones found, try text labels
+                # 2. Fallback: text labels if no table zones
                 full_text = soup.get_text(separator=' ', strip=True).upper()
                 if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
                     start = full_text.find("CURRENT TERROR ZONE:")
                     snippet = full_text[start + len("CURRENT TERROR ZONE:"): start + 150]
-                    current_zone = snippet.split("NEXT")[0].strip()
+                    current_zone = snippet.split("NEXT")[0].strip().upper()
 
                 if next_zone == 'PENDING' and "NEXT TERROR ZONE:" in full_text:
                     start = full_text.find("NEXT TERROR ZONE:")
                     snippet = full_text[start + len("NEXT TERROR ZONE:"): start + 150]
-                    next_zone = snippet.strip()
+                    next_zone = snippet.strip().upper()
 
                 now_text = f"Now: {current_zone}"
                 next_text = f"Next: {next_zone}"
