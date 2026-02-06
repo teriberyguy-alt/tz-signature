@@ -25,7 +25,8 @@ def get_terror_zones():
         for attempt in range(3):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
-                response.raise_for_status()
+                if response.status_code != 200:
+                    raise requests.exceptions.HTTPError(f"Status {response.status_code}")
                 data = response.json()
 
                 current_zone = data.get('currentTerrorZone', {}).get('zone', 'PENDING')
@@ -37,9 +38,9 @@ def get_terror_zones():
                     next_zone = 'PENDING'
 
                 return current_zone.upper(), next_zone.upper()
-            except requests.exceptions.RequestException:
+            except Exception as e:
                 if attempt == 2:
-                    return 'FETCH FAIL', 'FETCH FAIL'
+                    return f'ERR {response.status_code if "response" in locals() else "unknown"}', 'ERR'
                 time.sleep(2)
     except Exception:
         return 'FETCH ERROR', 'FETCH ERROR'
