@@ -16,37 +16,50 @@ def generate_signature():
     now_lines = ["TZ data unavailable"]
     next_lines = []
     countdown_str = ""
-
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
         }
         tz_url = 'https://d2emu.com/tz'
 
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'html.parser')
+                full_text = soup.get_text(separator=' ', strip=True).upper()
 
-                current_zone = 'PENDING'
+                current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Parse markdown table - robust version
-                lines = response.text.splitlines()
-                zone_candidates = []
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped:
-                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
-                        if len(parts) >= 2:
-                            zone_text = ' '.join(parts[1:]).strip()
-                            if zone_text and zone_text not in zone_candidates:
-                                zone_candidates.append(zone_text)
+                # Parse text if present
+                if "CURRENT TERROR ZONE:" in full_text:
+                    start = full_text.find("CURRENT TERROR ZONE:")
+                    snippet = full_text[start + len("CURRENT TERROR ZONE:"): start + 150]
+                    current_zone = snippet.split("NEXT TERROR ZONE:")[0].strip()
 
-                if zone_candidates:
-                    current_zone = zone_candidates[0]
-                    if len(zone_candidates) > 1:
-                        next_zone = ' '.join(zone_candidates[1:])
+                if "NEXT TERROR ZONE:" in full_text:
+                    start = full_text.find("NEXT TERROR ZONE:")
+                    snippet = full_text[start + len("NEXT TERROR ZONE:"): start + 150]
+                    next_zone = snippet.strip()
+
+                # Fallback to table if text not found
+                if current_zone == 'REPORT PENDING':
+                    lines = response.text.splitlines()
+                    zone_candidates = []
+                    for line in lines:
+                        stripped = line.strip()
+                        if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped:
+                            parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
+                            if len(parts) >= 2:
+                                zone_text = ' '.join(parts[1:])
+                                if zone_text:
+                                    zone_candidates.append(zone_text)
+
+                    if zone_candidates:
+                        current_zone = zone_candidates[0]
+                        if len(zone_candidates) > 1:
+                            next_zone = ' '.join(zone_candidates[1:])
 
                 now_text = f"Now: {current_zone}"
                 next_text = f"Next: {next_zone}"
@@ -67,11 +80,10 @@ def generate_signature():
                     countdown_str = f"{minutes} min, {seconds:02d} sec until"
 
                 break
-            except Exception as e:
-                if attempt == 2:
-                    now_lines = [f"Fetch err: {str(e)[:30]}"]
-                    break
-                time.sleep(2)
+            except requests.exceptions.RequestException:
+                if attempt == 1:
+                    raise
+                time.sleep(1)
     except Exception:
         now_lines = ["TZ Fetch Slow"]
         next_lines = ["Refresh in a few sec"]
@@ -86,22 +98,26 @@ def generate_signature():
         timer_font = ImageFont.truetype(font_path, 13)
 
         x = 10
-        y = 55
+        y = 55 # Back to original starting y (no title room needed)
         line_spacing = 15
 
+        # Shadow helper function
         def draw_with_shadow(text, px, py, fnt, color):
-            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
-            draw.text((px, py), text, font=fnt, fill=color)
+            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0)) # Shadow
+            draw.text((px, py), text, font=fnt, fill=color) # Main
 
+        # Draw "Now" lines with shadow
         for line in now_lines:
             draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
 
+        # Countdown with shadow + gold
         if countdown_str:
             y += 6
             draw_with_shadow(countdown_str, x + 5, y, timer_font, (255, 215, 0))
             y += line_spacing + 4
 
+        # Draw "Next" lines with shadow
         for line in next_lines:
             draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
