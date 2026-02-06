@@ -1,5 +1,5 @@
+beautifulsoup4
+lxml
 flask
 pillow
 requests
-beautifulsoup4
-lxml
