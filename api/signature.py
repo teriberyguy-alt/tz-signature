@@ -17,11 +17,11 @@ def generate_signature():
     next_lines = []
     countdown_str = ""
     try:
-        # Switch to scraping d2emu.com/tz for more reliable updates
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
         }
         tz_url = 'https://d2emu.com/tz'
+
         for attempt in range(2):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
@@ -32,7 +32,6 @@ def generate_signature():
                 current_zone = 'PENDING'
                 next_zone = 'PENDING'
 
-                # Parse markdown table for zones
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
@@ -75,6 +74,7 @@ def generate_signature():
     except Exception:
         now_lines = ["TZ Fetch Slow"]
         next_lines = ["Refresh in a few sec"]
+
     try:
         bg_path = os.path.join(BASE_DIR, 'bg.jpg')
         font_path = os.path.join(BASE_DIR, 'font.ttf')
@@ -85,26 +85,22 @@ def generate_signature():
         timer_font = ImageFont.truetype(font_path, 13)
 
         x = 10
-        y = 55 # Back to original starting y (no title room needed)
+        y = 55
         line_spacing = 15
 
-        # Shadow helper function
         def draw_with_shadow(text, px, py, fnt, color):
-            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0)) # Shadow
-            draw.text((px, py), text, font=fnt, fill=color) # Main
+            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
+            draw.text((px, py), text, font=fnt, fill=color)
 
-        # Draw "Now" lines with shadow
         for line in now_lines:
             draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
 
-        # Countdown with shadow + gold
         if countdown_str:
             y += 6
             draw_with_shadow(countdown_str, x + 5, y, timer_font, (255, 215, 0))
             y += line_spacing + 4
 
-        # Draw "Next" lines with shadow
         for line in next_lines:
             draw_with_shadow(line, x, y, font, (255, 255, 255))
             y += line_spacing
