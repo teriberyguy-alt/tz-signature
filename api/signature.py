@@ -16,7 +16,7 @@ def generate_signature():
     now_lines = ["TZ data unavailable"]
     next_lines = []
     countdown_str = ""
-
+    
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
@@ -32,7 +32,6 @@ def generate_signature():
                 current_zone = 'PENDING'
                 next_zone = 'PENDING'
 
-                # Parse markdown table
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
