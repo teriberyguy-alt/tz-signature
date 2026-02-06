@@ -6,3 +6,12 @@
     }
   ]
 }
+
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/signature.png", "destination": "/api/index.py" },
+    { "source": "/avatar.gif", "destination": "/api/avatar.py" },
+    { "source": "/(.*)", "destination": "/api/index.py" }  // fallback for sig if needed
+  ]
+}
