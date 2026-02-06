@@ -22,7 +22,7 @@ def get_terror_zones():
     tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'
 
     try:
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
@@ -31,16 +31,16 @@ def get_terror_zones():
                 current_zone = data.get('currentTerrorZone', {}).get('zone', 'PENDING')
                 next_zone = data.get('nextTerrorZone', {}).get('zone', 'PENDING')
 
-                if current_zone == 'Unknown':
+                if current_zone == 'Unknown' or not current_zone.strip():
                     current_zone = 'PENDING'
-                if next_zone == 'Unknown':
+                if next_zone == 'Unknown' or not next_zone.strip():
                     next_zone = 'PENDING'
 
                 return current_zone.upper(), next_zone.upper()
             except requests.exceptions.RequestException:
-                if attempt == 1:
+                if attempt == 2:
                     return 'FETCH FAIL', 'FETCH FAIL'
-                time.sleep(1)
+                time.sleep(2)
     except Exception:
         return 'FETCH ERROR', 'FETCH ERROR'
 
@@ -70,20 +70,17 @@ def avatar():
         y = 6
 
         if i == 0:
-            # NOW + current zone
             draw.text((4, y), "NOW:", fill=(255, 165, 0), font=font)
             y += 10
             for line in curr_lines:
                 draw.text((4, y), line, fill=(255, 255, 255), font=font)
                 y += 9
         elif i == 1:
-            # TIME left
             mins = 60 - datetime.now().minute
             timer_text = f"{mins}M LEFT"
             draw.text((4, 12), timer_text, fill=(255, 215, 0), font=font)
             draw.text((4, 30), "TIME", fill=(220, 220, 150), font=font)
         else:
-            # NEXT + next zone
             draw.text((4, y), "NEXT:", fill=(200, 40, 0), font=font)
             y += 10
             for line in next_lines:
@@ -98,7 +95,7 @@ def avatar():
         format='GIF',
         save_all=True,
         append_images=frames[1:],
-        duration=1000,  # 1 second pause per frame
+        duration=1000,
         loop=0,
         optimize=True
     )
