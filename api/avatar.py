@@ -20,7 +20,7 @@ def get_terror_zones():
     tz_url = 'https://d2emu.com/tz'
 
     try:
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 response.raise_for_status()
@@ -46,10 +46,10 @@ def get_terror_zones():
                         next_zone = ' '.join(zone_candidates[1:])
 
                 return current_zone, next_zone
-            except requests.exceptions.RequestException:
-                if attempt == 1:
-                    return 'FETCH FAIL', 'FETCH FAIL'
-                time.sleep(1)
+            except Exception as e:
+                if attempt == 2:
+                    return f'ERR {response.status_code if "response" in locals() else "unknown"}', 'ERR'
+                time.sleep(2)
     except Exception:
         return 'FETCH ERROR', 'FETCH ERROR'
 
