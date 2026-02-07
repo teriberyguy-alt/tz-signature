@@ -46,7 +46,7 @@ def get_terror_zones():
                     if len(zone_candidates) > 1:
                         next_zone = ' '.join(zone_candidates[1:])
 
-                # Text fallback if no table zones
+                # Text fallback
                 full_text = soup.get_text(separator=' ', strip=True).upper()
                 if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
                     start = full_text.find("CURRENT TERROR ZONE:")
