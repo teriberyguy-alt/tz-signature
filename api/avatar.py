@@ -12,8 +12,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def get_terror_zones():
     try:
-        tz_url = 'https://d2runewizard.com/api/terror-zone'  # your original URL
-       
+        tz_url = 'https://d2runewizard.com/api/terror-zone'  # your original working URL
+        
         for attempt in range(2):
             try:
                 response = requests.get(tz_url, timeout=15)
@@ -46,8 +46,7 @@ def avatar():
     except:
         font = ImageFont.load_default()
 
-    # Wrap long names
-    wrapper = textwrap.TextWrapper(width=12)  # adjust if needed
+    wrapper = textwrap.TextWrapper(width=12)
     curr_lines = wrapper.wrap(current_zone)
     next_lines = wrapper.wrap(next_zone)
 
@@ -60,7 +59,7 @@ def avatar():
 
         draw.rectangle((0, 0, 63, 63), outline=(200, 40, 0), width=1)
 
-        y = 6  # start position
+        y = 6
 
         if i == 0:
             # Frame 1: NOW + current zone (wrapped)
@@ -91,7 +90,7 @@ def avatar():
         format='GIF',
         save_all=True,
         append_images=frames[1:],
-        duration=1000,  # 1 second per frame = easier to read
+        duration=1000,  # 1 second pause per frame
         loop=0,
         optimize=True
     )
