@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/signature.png",
-      "destination": "/api/signature.py"
+      "destination": "/api/signature.js"
     },
     {
       "source": "/avatar.gif",
-      "destination": "/api/avatar.py"
+      "destination": "/api/avatar.js"
     }
   ]
 }
