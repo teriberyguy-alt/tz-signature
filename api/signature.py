@@ -24,7 +24,7 @@ def generate_signature():
     }
 
     try:
-        tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'
+        tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'  # v1 + cache bust
 
         for attempt in range(3):
             try:
@@ -48,7 +48,7 @@ def generate_signature():
                 now_lines = textwrap.wrap(now_text, width=35)
                 next_lines = textwrap.wrap(next_text, width=35)
 
-                # 30-minute cycle countdown
+                # 30-minute cycle countdown (updated for RoTW)
                 now_dt = datetime.utcnow()
                 # Time to next 30-min mark (0 or 30 min)
                 minutes_to_next = 30 - (now_dt.minute % 30)
