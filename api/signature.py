@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,40 +18,47 @@ def generate_signature():
     countdown_str = ""
     
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Referer': 'https://d2runewizard.com/terror-zone-tracker',
-        'Origin': 'https://d2runewizard.com'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
 
     try:
-        tz_url = f'https://d2runewizard.com/api/v1/terror-zone?t={int(time.time())}'  # v1 + cache bust
+        tz_url = 'https://d2emu.com/tz'
 
         for attempt in range(3):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 print(f"Attempt {attempt+1} - Status: {response.status_code}")
-                if response.status_code != 200:
-                    raise requests.exceptions.HTTPError(f"Status {response.status_code}")
-                data = response.json()
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'html.parser')
 
-                current_zone = data.get('currentTerrorZone', {}).get('zone', 'Unknown')
-                next_zone = data.get('nextTerrorZone', {}).get('zone', 'Unknown')
+                current_zone = 'REPORT PENDING'
+                next_zone = 'PENDING'
 
-                if current_zone == 'Unknown' or not current_zone.strip():
-                    current_zone = 'REPORT PENDING'
-                if next_zone == 'Unknown' or not next_zone.strip():
-                    next_zone = 'PENDING'
+                # Parse markdown table for zones
+                lines = response.text.splitlines()
+                zone_candidates = []
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped:
+                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
+                        if len(parts) >= 2:
+                            zone_text = ' '.join(parts[1:])
+                            if zone_text and zone_text not in zone_candidates:
+                                zone_candidates.append(zone_text)
 
-                now_text = f"Now: {current_zone.upper()}"
-                next_text = f"Next: {next_zone.upper()}"
+                if zone_candidates:
+                    current_zone = zone_candidates[0]
+                    if len(zone_candidates) > 1:
+                        next_zone = ' '.join(zone_candidates[1:])
+
+                now_text = f"Now: {current_zone}"
+                next_text = f"Next: {next_zone}"
 
                 now_lines = textwrap.wrap(now_text, width=35)
                 next_lines = textwrap.wrap(next_text, width=35)
 
-                # 30-minute cycle countdown (updated for RoTW)
+                # 30-minute cycle countdown
                 now_dt = datetime.utcnow()
-                # Time to next 30-min mark (0 or 30 min)
                 minutes_to_next = 30 - (now_dt.minute % 30)
                 seconds_to_next = minutes_to_next * 60 - now_dt.second
                 if seconds_to_next < 0:
