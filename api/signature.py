@@ -34,15 +34,15 @@ def generate_signature():
                 current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Strict table parse: only |  | lines with zone names
+                # Broader table parse - any | line with zone text, skip immunities
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
                     stripped = line.strip()
-                    if stripped.startswith('|  |') and '---' not in stripped and 'immunities' not in stripped.lower():
-                        parts = stripped.split('|')
-                        if len(parts) >= 3:
-                            zone_text = parts[2].strip().upper()
+                    if stripped.startswith('|') and '|' in stripped[1:] and '---' not in stripped and 'immunities' not in stripped.lower():
+                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
+                        if len(parts) >= 2:
+                            zone_text = ' '.join(parts[1:]).strip()
                             if zone_text and zone_text != '---' and len(zone_text) > 3:
                                 zone_candidates.append(zone_text)
 
@@ -51,19 +51,19 @@ def generate_signature():
                     if len(zone_candidates) > 1:
                         next_zone = ' '.join(zone_candidates[1:])
 
-                # Text fallback if table failed
+                # Text fallback if no table zones
                 full_text = soup.get_text(separator=' ', strip=True).upper()
-                if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
-                    start = full_text.find("CURRENT TERROR ZONE:")
-                    end = full_text.find("NEXT TERROR ZONE:", start)
+                if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE" in full_text:
+                    start = full_text.find("CURRENT TERROR ZONE")
+                    end = full_text.find("NEXT TERROR ZONE", start)
                     if end == -1:
                         end = len(full_text)
-                    snippet = full_text[start + len("CURRENT TERROR ZONE:"):end].strip()
+                    snippet = full_text[start + 20:end].strip()
                     current_zone = snippet.upper()
 
-                if next_zone == 'PENDING' and "NEXT TERROR ZONE:" in full_text:
-                    start = full_text.find("NEXT TERROR ZONE:")
-                    snippet = full_text[start + len("NEXT TERROR ZONE:"):].strip()
+                if next_zone == 'PENDING' and "NEXT TERROR ZONE" in full_text:
+                    start = full_text.find("NEXT TERROR ZONE")
+                    snippet = full_text[start + 17:].strip()
                     next_zone = snippet.upper()
 
                 now_text = f"Now: {current_zone}"
