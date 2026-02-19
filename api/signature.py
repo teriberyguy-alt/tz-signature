@@ -33,18 +33,19 @@ def generate_signature():
                 current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Simple text parse - d2emu has labels
+                # Extract current zone
                 if "CURRENT TERROR ZONE:" in text:
                     start = text.find("CURRENT TERROR ZONE:")
                     end = text.find("NEXT TERROR ZONE:", start)
                     if end == -1:
                         end = len(text)
                     snippet = text[start + len("CURRENT TERROR ZONE:"):end].strip()
-                    # Clean immunities junk
+                    # Clean immunities if included
                     if "IMMUN" in snippet:
                         snippet = snippet.split("IMMUN")[0].strip()
                     current_zone = snippet.upper()
 
+                # Extract next zone
                 if "NEXT TERROR ZONE:" in text:
                     start = text.find("NEXT TERROR ZONE:")
                     snippet = text[start + len("NEXT TERROR ZONE:"):].strip()
