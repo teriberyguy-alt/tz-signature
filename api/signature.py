@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,34 +21,31 @@ def generate_signature():
     }
 
     try:
-        tz_url = 'https://d2emu.com/tz'
+        tz_url = 'https://hellforge.gg/terror-zone-tracker'
 
         for attempt in range(3):
             try:
                 response = requests.get(tz_url, headers=headers, timeout=15)
                 print(f"Attempt {attempt+1} - Status: {response.status_code}")
                 response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
+                text = response.text.upper()
 
                 current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Original working parse - strict for zones
-                lines = response.text.splitlines()
-                zone_candidates = []
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith('|  |') and '---' not in stripped and 'immunities' not in stripped.lower():
-                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
-                        if len(parts) >= 2:
-                            zone_text = ' '.join(parts[1:])
-                            if zone_text and zone_text != '---' and len(zone_text) > 3:
-                                zone_candidates.append(zone_text)
+                # Simple text parse - hellforge has explicit labels
+                if "CURRENT TERROR ZONE:" in text:
+                    start = text.find("CURRENT TERROR ZONE:")
+                    end = text.find("NEXT TERROR ZONE:", start)
+                    if end == -1:
+                        end = len(text)
+                    snippet = text[start + len("CURRENT TERROR ZONE:"):end].strip()
+                    current_zone = snippet.upper()
 
-                if zone_candidates:
-                    current_zone = zone_candidates[0]
-                    if len(zone_candidates) > 1:
-                        next_zone = ' '.join(zone_candidates[1:])
+                if "NEXT TERROR ZONE:" in text:
+                    start = text.find("NEXT TERROR ZONE:")
+                    snippet = text[start + len("NEXT TERROR ZONE:"):].strip()
+                    next_zone = snippet.upper()
 
                 now_text = f"Now: {current_zone}"
                 next_text = f"Next: {next_zone}"
