@@ -34,24 +34,29 @@ def generate_signature():
                 current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Strict table parse - only |  | lines, skip immunities row
+                # Extremely strict table parse - only |  | lines with zone name
                 lines = response.text.splitlines()
                 zone_candidates = []
                 for line in lines:
                     stripped = line.strip()
-                    if stripped.startswith('|  |') and '---' not in stripped and 'immunities' not in stripped.lower() and 'monsters with' not in stripped.lower():
-                        parts = stripped.split('|')
-                        if len(parts) >= 3:
-                            zone_text = parts[2].strip().upper()
-                            if zone_text and zone_text != '---' and len(zone_text) > 3 and 'IMMUNE' not in zone_text:
+                    if stripped.startswith('|  |') and '---' not in stripped:
+                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
+                        if len(parts) == 2:  # empty first | zone second
+                            zone_text = parts[1]
+                            # Skip immunities or junk
+                            if any(word in zone_text for word in ['IMMUN', 'MONSTERS', 'COLD', 'FIRE', 'LIGHTNING', 'POISON', 'MAGIC']):
+                                continue
+                            if len(zone_text) > 5 and zone_text != '---':
                                 zone_candidates.append(zone_text)
+
+                print(f"Parsed zone candidates: {zone_candidates}")  # Debug to logs
 
                 if zone_candidates:
                     current_zone = zone_candidates[0]
                     if len(zone_candidates) > 1:
                         next_zone = ' '.join(zone_candidates[1:])
 
-                # Text fallback if table failed
+                # Text fallback only if no zones
                 full_text = soup.get_text(separator=' ', strip=True).upper()
                 if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
                     start = full_text.find("CURRENT TERROR ZONE:")
