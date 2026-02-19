@@ -21,7 +21,7 @@ def generate_signature():
     }
 
     try:
-        tz_url = 'https://hellforge.gg/terror-zone-tracker'
+        tz_url = 'https://d2emu.com/tz'
 
         for attempt in range(3):
             try:
@@ -33,18 +33,23 @@ def generate_signature():
                 current_zone = 'REPORT PENDING'
                 next_zone = 'PENDING'
 
-                # Simple text parse - hellforge has explicit labels
+                # Simple text parse - d2emu has labels
                 if "CURRENT TERROR ZONE:" in text:
                     start = text.find("CURRENT TERROR ZONE:")
                     end = text.find("NEXT TERROR ZONE:", start)
                     if end == -1:
                         end = len(text)
                     snippet = text[start + len("CURRENT TERROR ZONE:"):end].strip()
+                    # Clean immunities junk
+                    if "IMMUN" in snippet:
+                        snippet = snippet.split("IMMUN")[0].strip()
                     current_zone = snippet.upper()
 
                 if "NEXT TERROR ZONE:" in text:
                     start = text.find("NEXT TERROR ZONE:")
                     snippet = text[start + len("NEXT TERROR ZONE:"):].strip()
+                    if "IMMUN" in snippet:
+                        snippet = snippet.split("IMMUN")[0].strip()
                     next_zone = snippet.upper()
 
                 now_text = f"Now: {current_zone}"
