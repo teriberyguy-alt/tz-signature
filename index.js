@@ -1,152 +1,63 @@
-import io
-import os
-import requests
-import textwrap
-import time
-from datetime import datetime
-from PIL import Image, ImageDraw, ImageFont
-from flask import Flask, Response
-from bs4 import BeautifulSoup
+const express = require('express');
+const sharp = require('sharp');
+const axios = require('axios');
 
-app = Flask(__name__)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+const app = express();
+const port = process.env.PORT || 3000;
 
-@app.route('/signature.png')
-def generate_signature():
-    now_lines = ["TZ data unavailable"]
-    next_lines = []
-    countdown_str = ""
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+app.get('/signature.png', async (req, res) => {
+  try {
+    const response = await axios.get('https://d2emu.com/tz', {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+
+    const text = response.data.toUpperCase();
+
+    let current = 'REPORT PENDING';
+    let next = 'PENDING';
+
+    // Extract zones from page text
+    const currentMatch = text.match(/CURRENT TERROR ZONE:\s*([^\n<]+)/i);
+    if (currentMatch) {
+      current = currentMatch[1].trim().split('IMMUN')[0].trim();
     }
 
-    try:
-        tz_url = 'https://d2emu.com/tz'
+    const nextMatch = text.match(/NEXT TERROR ZONE:\s*([^\n<]+)/i);
+    if (nextMatch) {
+      next = nextMatch[1].trim().split('IMMUN')[0].trim();
+    }
 
-        for attempt in range(3):
-            try:
-                response = requests.get(tz_url, headers=headers, timeout=15)
-                print(f"Attempt {attempt+1} - Status: {response.status_code}")
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
+    // 30-minute countdown
+    const now = new Date();
+    const minutes = now.getUTCMinutes();
+    const seconds = now.getUTCSeconds();
+    const minutesToNext = 30 - (minutes % 30);
+    const secondsToNext = minutesToNext * 60 - seconds;
+    const minsLeft = Math.floor(secondsToNext / 60);
+    const secsLeft = secondsToNext % 60;
+    const countdown = minsLeft === 0 ? `${secsLeft} seconds until` : `${minsLeft} min, ${secsLeft.toString().padStart(2, '0')} sec until`;
 
-                current_zone = 'REPORT PENDING'
-                next_zone = 'PENDING'
+    // Generate image with sharp
+    const svg = `
+      <svg width="300" height="140">
+        <rect width="300" height="140" fill="#111"/>
+        <text x="10" y="30" fill="#c00" font-size="20" font-family="Arial">TERROR ZONES</text>
+        <text x="10" y="60" fill="#fff" font-size="16" font-family="Arial">Now: ${current}</text>
+        <text x="10" y="85" fill="#fff" font-size="16" font-family="Arial">Next: ${next}</text>
+        <text x="10" y="110" fill="#ff0" font-size="14" font-family="Arial">${countdown}</text>
+        <text x="220" y="130" fill="#888" font-size="12" font-family="Arial">Guy_T</text>
+      </svg>`;
 
-                # Strict parse - only |  | lines with zone name, skip immunities
-                lines = response.text.splitlines()
-                zone_candidates = []
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith('|  |') and '---' not in stripped:
-                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
-                        if len(parts) == 2:  # empty first | zone second
-                            zone_text = parts[1]
-                            # Skip immunities or junk
-                            if any(word in zone_text for word in ['IMMUN', 'MONSTERS', 'COLD', 'FIRE', 'LIGHTNING', 'POISON', 'MAGIC']):
-                                continue
-                            if len(zone_text) > 5 and zone_text != '---':
-                                zone_candidates.append(zone_text)
+    const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
 
-                print(f"Parsed zone candidates: {zone_candidates}")  # Debug to logs
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(buffer);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Error generating sig');
+  }
+});
 
-                if zone_candidates:
-                    current_zone = zone_candidates[0]
-                    if len(zone_candidates) > 1:
-                        next_zone = ' '.join(zone_candidates[1:])
-
-                # Text fallback only if no zones
-                full_text = soup.get_text(separator=' ', strip=True).upper()
-                if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
-                    start = full_text.find("CURRENT TERROR ZONE:")
-                    end = full_text.find("NEXT TERROR ZONE:", start)
-                    if end == -1:
-                        end = len(full_text)
-                    snippet = full_text[start + len("CURRENT TERROR ZONE:"):end].strip()
-                    # Clean immunities if included
-                    if "IMMUN" in snippet:
-                        snippet = snippet.split("IMMUN")[0].strip()
-                    current_zone = snippet.upper()
-
-                if next_zone == 'PENDING' and "NEXT TERROR ZONE:" in full_text:
-                    start = full_text.find("NEXT TERROR ZONE:")
-                    snippet = full_text[start + len("NEXT TERROR ZONE:"):].strip()
-                    if "IMMUN" in snippet:
-                        snippet = snippet.split("IMMUN")[0].strip()
-                    next_zone = snippet.upper()
-
-                now_text = f"Now: {current_zone}"
-                next_text = f"Next: {next_zone}"
-
-                now_lines = textwrap.wrap(now_text, width=35)
-                next_lines = textwrap.wrap(next_text, width=35)
-
-                # 30-minute cycle countdown
-                now_dt = datetime.utcnow()
-                minutes_to_next = 30 - (now_dt.minute % 30)
-                seconds_to_next = minutes_to_next * 60 - now_dt.second
-                if seconds_to_next < 0:
-                    seconds_to_next = 0
-                minutes = seconds_to_next // 60
-                seconds = seconds_to_next % 60
-
-                if minutes == 0:
-                    countdown_str = f"{seconds} seconds until"
-                else:
-                    countdown_str = f"{minutes} min, {seconds:02d} sec until"
-
-                break
-            except Exception as e:
-                print(f"Attempt {attempt+1} failed: {str(e)}")
-                if attempt == 2:
-                    now_lines = [f"Fetch err: {str(e)[:30]}"]
-                    break
-                time.sleep(2)
-    except Exception as e:
-        print(f"Overall fetch error: {str(e)}")
-        now_lines = ["TZ Fetch Slow"]
-        next_lines = ["Refresh in a few sec"]
-
-    try:
-        bg_path = os.path.join(BASE_DIR, 'bg.jpg')
-        font_path = os.path.join(BASE_DIR, 'font.ttf')
-
-        bg_image = Image.open(bg_path).convert('RGBA')
-        draw = ImageDraw.Draw(bg_image)
-        font = ImageFont.truetype(font_path, 12)
-        timer_font = ImageFont.truetype(font_path, 13)
-
-        x = 10
-        y = 55
-        line_spacing = 15
-
-        def draw_with_shadow(text, px, py, fnt, color):
-            draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
-            draw.text((px, py), text, font=fnt, fill=color)
-
-        for line in now_lines:
-            draw_with_shadow(line, x, y, font, (255, 255, 255))
-            y += line_spacing
-
-        if countdown_str:
-            y += 6
-            draw_with_shadow(countdown_str, x + 5, y, timer_font, (255, 215, 0))
-            y += line_spacing + 4
-
-        for line in next_lines:
-            draw_with_shadow(line, x, y, font, (255, 255, 255))
-            y += line_spacing
-
-        img_bytes = io.BytesIO()
-        bg_image.save(img_bytes, format='PNG')
-        img_bytes.seek(0)
-
-        return Response(img_bytes, mimetype='image/png')
-    except Exception as e:
-        print(f"Image generation error: {str(e)}")
-        return Response(f"Image error: {str(e)}".encode(), mimetype='text/plain', status=500)
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+app.listen(port, () => console.log(`Listening on port ${port}`));
