@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,89 +21,55 @@ def generate_signature():
     }
 
     try:
-        tz_url = 'https://d2emu.com/tz'
+        tz_url = 'https://hellforge.gg/terror-zone-tracker'
 
-        for attempt in range(3):
-            try:
-                response = requests.get(tz_url, headers=headers, timeout=15)
-                print(f"Attempt {attempt+1} - Status: {response.status_code}")
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
+        response = requests.get(tz_url, headers=headers, timeout=10)
+        print(f"Status: {response.status_code}")
+        response.raise_for_status()
+        text = response.text.upper()
 
-                current_zone = 'REPORT PENDING'
-                next_zone = 'PENDING'
+        current_zone = 'REPORT PENDING'
+        next_zone = 'PENDING'
 
-                # Strict table parse - only |  | lines with zone name, skip immunities
-                lines = response.text.splitlines()
-                zone_candidates = []
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith('|  |') and '---' not in stripped:
-                        parts = [p.strip().upper() for p in stripped.split('|') if p.strip()]
-                        if len(parts) == 2:  # empty first | zone second
-                            zone_text = parts[1]
-                            # Skip immunities or junk lines
-                            if any(word in zone_text for word in ['IMMUN', 'MONSTERS', 'COLD', 'FIRE', 'LIGHTNING', 'POISON', 'MAGIC']):
-                                continue
-                            if len(zone_text) > 5 and zone_text != '---':
-                                zone_candidates.append(zone_text)
+        # Simple string extraction
+        current_label = "CURRENT TERROR ZONE:"
+        next_label = "NEXT TERROR ZONE:"
 
-                print(f"Parsed zone candidates: {zone_candidates}")
+        if current_label in text:
+            start = text.find(current_label) + len(current_label)
+            end = text.find(next_label, start)
+            if end == -1:
+                end = len(text)
+            snippet = text[start:end].strip()
+            current_zone = snippet.upper()
 
-                if zone_candidates:
-                    current_zone = zone_candidates[0]
-                    if len(zone_candidates) > 1:
-                        next_zone = ' '.join(zone_candidates[1:])
+        if next_label in text:
+            start = text.find(next_label) + len(next_label)
+            snippet = text[start:].strip()
+            next_zone = snippet.upper()
 
-                # Text fallback only if no zones found
-                full_text = soup.get_text(separator=' ', strip=True).upper()
-                if current_zone == 'REPORT PENDING' and "CURRENT TERROR ZONE:" in full_text:
-                    start = full_text.find("CURRENT TERROR ZONE:")
-                    end = full_text.find("NEXT TERROR ZONE:", start)
-                    if end == -1:
-                        end = len(full_text)
-                    snippet = full_text[start + len("CURRENT TERROR ZONE:"):end].strip()
-                    # Clean immunities if included
-                    if "IMMUN" in snippet:
-                        snippet = snippet.split("IMMUN")[0].strip()
-                    current_zone = snippet.upper()
+        now_text = f"Now: {current_zone}"
+        next_text = f"Next: {next_zone}"
 
-                if next_zone == 'PENDING' and "NEXT TERROR ZONE:" in full_text:
-                    start = full_text.find("NEXT TERROR ZONE:")
-                    snippet = full_text[start + len("NEXT TERROR ZONE:"):].strip()
-                    if "IMMUN" in snippet:
-                        snippet = snippet.split("IMMUN")[0].strip()
-                    next_zone = snippet.upper()
+        now_lines = textwrap.wrap(now_text, width=35)
+        next_lines = textwrap.wrap(next_text, width=35)
 
-                now_text = f"Now: {current_zone}"
-                next_text = f"Next: {next_zone}"
+        # 30-minute cycle countdown
+        now_dt = datetime.utcnow()
+        minutes_to_next = 30 - (now_dt.minute % 30)
+        seconds_to_next = minutes_to_next * 60 - now_dt.second
+        if seconds_to_next < 0:
+            seconds_to_next = 0
+        minutes = seconds_to_next // 60
+        seconds = seconds_to_next % 60
 
-                now_lines = textwrap.wrap(now_text, width=35)
-                next_lines = textwrap.wrap(next_text, width=35)
+        if minutes == 0:
+            countdown_str = f"{seconds} seconds until"
+        else:
+            countdown_str = f"{minutes} min, {seconds:02d} sec until"
 
-                # 30-minute cycle countdown
-                now_dt = datetime.utcnow()
-                minutes_to_next = 30 - (now_dt.minute % 30)
-                seconds_to_next = minutes_to_next * 60 - now_dt.second
-                if seconds_to_next < 0:
-                    seconds_to_next = 0
-                minutes = seconds_to_next // 60
-                seconds = seconds_to_next % 60
-
-                if minutes == 0:
-                    countdown_str = f"{seconds} seconds until"
-                else:
-                    countdown_str = f"{minutes} min, {seconds:02d} sec until"
-
-                break
-            except Exception as e:
-                print(f"Attempt {attempt+1} failed: {str(e)}")
-                if attempt == 2:
-                    now_lines = [f"Fetch err: {str(e)[:30]}"]
-                    break
-                time.sleep(2)
     except Exception as e:
-        print(f"Overall fetch error: {str(e)}")
+        print(f"Fetch error: {str(e)}")
         now_lines = ["TZ Fetch Slow"]
         next_lines = ["Refresh in a few sec"]
 
