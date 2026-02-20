@@ -19,21 +19,27 @@ app.get('/signature.png', async (req, res) => {
         timeout: 10000,
         headers: { 'User-Agent': 'Mozilla/5.0' }
       });
-      const text = response.data.toUpperCase();
+      const text = response.data;
 
       console.log('Page fetched - length:', text.length);
 
-      // Extract zones
-      const currentMatch = text.match(/CURRENT TERROR ZONE:\s*([^\n<]+)/i);
+      // Flexible extraction (ignore case, extra spaces, HTML tags)
+      const currentMatch = text.match(/Current\s*Terror\s*Zone:\s*([^<>\n]+)/i);
       if (currentMatch) {
-        current = currentMatch[1].trim().split('IMMUN')[0].trim();
-        console.log('Current:', current);
+        current = currentMatch[1].trim().split(/immun/i)[0].trim();
+        console.log('Current zone extracted:', current);
       }
 
-      const nextMatch = text.match(/NEXT TERROR ZONE:\s*([^\n<]+)/i);
+      const nextMatch = text.match(/Next\s*Terror\s*Zone:\s*([^<>\n]+)/i);
       if (nextMatch) {
-        next = nextMatch[1].trim().split('IMMUN')[0].trim();
-        console.log('Next:', next);
+        next = nextMatch[1].trim().split(/immun/i)[0].trim();
+        console.log('Next zone extracted:', next);
+      }
+
+      // Log raw snippet around label for debug
+      if (text.match(/Current\s*Terror\s*Zone:/i)) {
+        const start = text.toUpperCase().indexOf('CURRENT TERROR ZONE:');
+        console.log('Raw snippet around current label:', text.substring(start, start + 200));
       }
     } catch (err) {
       console.error('Fetch error:', err.message);
