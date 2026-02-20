@@ -20,58 +20,72 @@ def generate_signature():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
 
-    try:
-        tz_url = 'https://hellforge.gg/terror-zone-tracker'
+    tz_url = 'https://d2emu.com/tz'
 
-        response = requests.get(tz_url, headers=headers, timeout=10)
-        print(f"Status: {response.status_code}")
-        response.raise_for_status()
-        text = response.text.upper()
+    success = False
+    for attempt in range(4):
+        try:
+            response = requests.get(tz_url, headers=headers, timeout=12)
+            print(f"Attempt {attempt+1} - Status: {response.status_code}")
+            response.raise_for_status()
+            text = response.text.upper()
+            success = True
 
-        current_zone = 'REPORT PENDING'
-        next_zone = 'PENDING'
+            current_zone = 'REPORT PENDING'
+            next_zone = 'PENDING'
 
-        # Simple string extraction
-        current_label = "CURRENT TERROR ZONE:"
-        next_label = "NEXT TERROR ZONE:"
+            current_label = "CURRENT TERROR ZONE:"
+            next_label = "NEXT TERROR ZONE:"
+            immun_label = "TERROR ZONE HAS MONSTERS WITH IMMUNITIES"
 
-        if current_label in text:
-            start = text.find(current_label) + len(current_label)
-            end = text.find(next_label, start)
-            if end == -1:
-                end = len(text)
-            snippet = text[start:end].strip()
-            current_zone = snippet.upper()
+            if current_label in text:
+                start = text.find(current_label) + len(current_label)
+                end = text.find(next_label, start)
+                if end == -1:
+                    end = len(text)
+                snippet = text[start:end].strip()
+                immun_pos = snippet.find(immun_label)
+                if immun_pos != -1:
+                    snippet = snippet[:immun_pos].strip()
+                current_zone = snippet.upper()
 
-        if next_label in text:
-            start = text.find(next_label) + len(next_label)
-            snippet = text[start:].strip()
-            next_zone = snippet.upper()
+            if next_label in text:
+                start = text.find(next_label) + len(next_label)
+                snippet = text[start:].strip()
+                immun_pos = snippet.find(immun_label)
+                if immun_pos != -1:
+                    snippet = snippet[:immun_pos].strip()
+                next_zone = snippet.upper()
 
-        now_text = f"Now: {current_zone}"
-        next_text = f"Next: {next_zone}"
+            now_text = f"Now: {current_zone}"
+            next_text = f"Next: {next_zone}"
 
-        now_lines = textwrap.wrap(now_text, width=35)
-        next_lines = textwrap.wrap(next_text, width=35)
+            now_lines = textwrap.wrap(now_text, width=35)
+            next_lines = textwrap.wrap(next_text, width=35)
 
-        # 30-minute cycle countdown
-        now_dt = datetime.utcnow()
-        minutes_to_next = 30 - (now_dt.minute % 30)
-        seconds_to_next = minutes_to_next * 60 - now_dt.second
-        if seconds_to_next < 0:
-            seconds_to_next = 0
-        minutes = seconds_to_next // 60
-        seconds = seconds_to_next % 60
+            break
+        except Exception as e:
+            print(f"Attempt {attempt+1} failed: {str(e)}")
+            time.sleep(attempt * 2 + 1)  # backoff: 1s, 3s, 5s, 7s
 
-        if minutes == 0:
-            countdown_str = f"{seconds} seconds until"
-        else:
-            countdown_str = f"{minutes} min, {seconds:02d} sec until"
-
-    except Exception as e:
-        print(f"Fetch error: {str(e)}")
+    if not success:
+        print("All fetch attempts failed")
         now_lines = ["TZ Fetch Slow"]
         next_lines = ["Refresh in a few sec"]
+
+    # 30-minute countdown
+    now_dt = datetime.utcnow()
+    minutes_to_next = 30 - (now_dt.minute % 30)
+    seconds_to_next = minutes_to_next * 60 - now_dt.second
+    if seconds_to_next < 0:
+        seconds_to_next = 0
+    minutes = seconds_to_next // 60
+    seconds = seconds_to_next % 60
+
+    if minutes == 0:
+        countdown_str = f"{seconds} seconds until"
+    else:
+        countdown_str = f"{minutes} min, {seconds:02d} sec until"
 
     try:
         bg_path = os.path.join(BASE_DIR, 'bg.jpg')
