@@ -1,7 +1,0 @@
-flask
-pillow
-requests
-beautifulsoup4
-lxml
-gunicorn
-uvicorn
