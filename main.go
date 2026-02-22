@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -177,5 +176,5 @@ func handleSignature(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Write(buf.Bytes())
 
-	log.Printf("Sig generated in %v", time.Since(time.Now()))
+	log.Printf("Sig generated in %v", time.Since(start))
 }
