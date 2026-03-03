@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
@@ -59,52 +58,74 @@ func handleSignature(w http.ResponseWriter, r *http.Request) {
 	if err == nil && resp.StatusCode == http.StatusOK {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		text := strings.ToUpper(string(body))
+		text := string(body) // Keep case as-is for better matching
 
-		// Extract current zone
-		if idx := strings.Index(text, "CURRENT TERROR ZONE:"); idx != -1 {
-			section := text[idx+len("CURRENT TERROR ZONE:"):]
-			end := strings.Index(section, "NEXT TERROR ZONE:")
-			if end == -1 {
-				end = len(section)
-			}
-			snippet := section[:end]
+		// Split into lines for easier parsing
+		lines := strings.Split(text, "\n")
+		inCurrent := false
+		inNext := false
+		var currentZones, nextZones []string
 
-			// Clean up date/immunities
-			if dotIdx := strings.Index(snippet, "."); dotIdx != -1 {
-				snippet = snippet[dotIdx+1:]
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
 			}
-			if immIdx := strings.Index(snippet, "IMMUN"); immIdx != -1 {
-				snippet = snippet[:immIdx]
+
+			if strings.HasPrefix(line, "Current Terror Zone:") {
+				inCurrent = true
+				inNext = false
+				// Skip the prefix and date/immunities
+				parts := strings.Split(line, ".")
+				if len(parts) > 2 {
+					zonePart := strings.Join(parts[2:], ".") // After second period
+					zones := strings.Fields(strings.TrimSpace(zonePart))
+					currentZones = append(currentZones, zones...)
+				}
+				continue
 			}
-			current = strings.TrimSpace(strings.ReplaceAll(snippet, ".", " "))
-			current = strings.TrimSpace(current)
-			if current == "" {
-				current = "PENDING"
+
+			if strings.HasPrefix(line, "Next Terror Zone:") {
+				inCurrent = false
+				inNext = true
+				// Similar, but next often has no date/immun
+				parts := strings.Split(line, ":")
+				if len(parts) > 1 {
+					zonePart := strings.TrimSpace(parts[1])
+					zones := strings.Fields(zonePart)
+					nextZones = append(nextZones, zones...)
+				}
+				continue
+			}
+
+			// Collect zone lines (they are often on separate lines or space-separated)
+			if inCurrent && !strings.Contains(line, "immunities") && !strings.HasPrefix(line, "Next") {
+				zones := strings.Fields(line)
+				if len(zones) > 0 {
+					currentZones = append(currentZones, zones...)
+				}
+			}
+
+			if inNext && !strings.Contains(line, "immunities") {
+				zones := strings.Fields(line)
+				if len(zones) > 0 {
+					nextZones = append(nextZones, zones...)
+				}
 			}
 		}
 
-		// Extract next zone
-		if idx := strings.Index(text, "NEXT TERROR ZONE:"); idx != -1 {
-			section := text[idx+len("NEXT TERROR ZONE:"):]
-			// No further sections, take until end or immun line
-			end := strings.Index(section, "IMMUN")
-			if end == -1 {
-				end = len(section)
-			}
-			snippet := section[:end]
-
-			next = strings.TrimSpace(strings.ReplaceAll(snippet, ".", " "))
-			next = strings.TrimSpace(next)
-			if next == "" {
-				next = "PENDING"
-			}
+		// Join zones with " + "
+		if len(currentZones) > 0 {
+			current = strings.Join(currentZones, " + ")
+		}
+		if len(nextZones) > 0 {
+			next = strings.Join(nextZones, " + ")
 		}
 	} else {
 		log.Printf("Fetch error: %v", err)
 	}
 
-	// 30-minute countdown (approximate to next :00 or :30)
+	// 30-minute countdown (to next :00 or :30 UTC)
 	now := time.Now().UTC()
 	minutes := now.Minute()
 	secs := now.Second()
@@ -114,13 +135,15 @@ func handleSignature(w http.ResponseWriter, r *http.Request) {
 	}
 	secsToNext := minsToNext*60 - secs
 	if secsToNext < 0 {
-		secsToNext += 3600 // rare edge case
+		secsToNext += 3600
 	}
 	minsLeft := secsToNext / 60
 	secsLeft := secsToNext % 60
-	countdown := fmt.Sprintf("%d min, %02d sec until", minsLeft, secsLeft)
-	if minsLeft == 0 {
-		countdown = fmt.Sprintf("%d seconds until", secsLeft)
+	countdown := fmt.Sprintf("%d min %02d sec until next", minsLeft, secsLeft)
+	if minsLeft == 0 && secsLeft > 0 {
+		countdown = fmt.Sprintf("%d sec until next", secsLeft)
+	} else if secsToNext == 0 {
+		countdown = "Rotating now..."
 	}
 
 	// Load background
@@ -138,7 +161,7 @@ func handleSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new image (taller for longer zone names)
+	// Create new image (height 160 for multi-lines)
 	img := image.NewRGBA(image.Rect(0, 0, 300, 160))
 	draw.Draw(img, img.Bounds(), bgImg, bgImg.Bounds().Min, draw.Src)
 
@@ -184,19 +207,24 @@ func handleSignature(w http.ResponseWriter, r *http.Request) {
 		d.DrawString(text)
 	}
 
-	y := 45 // Start higher for better centering
-	drawText("Now:", 10, y, color.White, face)
+	// Draw Current Zone
+	y := 25
+	drawText("Current Zone:", 10, y, color.White, face)
 	y += 18
-	for _, line := range wrapText(fmt.Sprintf("%s", current), 32) {
+	for _, line := range wrapText(current, 32) {
 		drawText(line, 15, y, color.White, face)
 		y += 15
 	}
-	y += 8
-	drawText(countdown, 15, y, color.RGBA{255, 215, 0, 255}, timerFace)
+
+	// Draw Countdown
+	y += 10
+	drawText(countdown, 10, y, color.RGBA{255, 215, 0, 255}, timerFace)
+
+	// Draw Next Zone
 	y += 22
-	drawText("Next:", 10, y, color.White, face)
+	drawText("Next Zone:", 10, y, color.White, face)
 	y += 18
-	for _, line := range wrapText(fmt.Sprintf("%s", next), 32) {
+	for _, line := range wrapText(next, 32) {
 		drawText(line, 15, y, color.White, face)
 		y += 15
 	}
