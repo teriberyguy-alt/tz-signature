@@ -16,62 +16,48 @@ def signature():
         r = requests.get('https://d2emu.com/tz', timeout=10)
         if r.status_code == 200:
             text = r.text.upper()
+            lines = text.splitlines()
 
-            # Log raw fetch for debug (check Render logs)
-            print("DEBUG RAW FETCH START ---")
-            print(text[500:2000])  # Mid-page chunk to catch zones
-            print("DEBUG RAW FETCH END ---")
+            # Debug: Log relevant parts
+            print("DEBUG: Fetch status 200 - looking for table lines")
 
-            # Remove script/style tags and junk to clean
-            text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r'<STYLE.*?</STYLE>', '', text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r'\{[^}]*\}', '', text)  # Strip CSS blocks
-            text = re.sub(r'POSITION:|DISPLAY:|CURSOR:|VISIBILITY:|COLOR:|BACKGROUND:|TEXT-ALIGN:', '', text)
-
-            lines = [line.strip() for line in text.splitlines() if line.strip() and len(line) > 5]
-
-            collecting_current = False
-            collecting_next = False
-            current_lines = []
-            next_lines = []
+            current_zones = []
+            next_zones = []
+            in_table = False
+            separator_seen = False
 
             for line in lines:
-                if 'CURRENT TERROR ZONE' in line or 'CURRENT ZONE' in line:
-                    collecting_current = True
-                    collecting_next = False
-                    continue
-                if 'NEXT TERROR ZONE' in line or 'NEXT ZONE' in line:
-                    collecting_current = False
-                    collecting_next = True
+                line = line.strip()
+                if not line:
                     continue
 
-                # Zone pattern: capitalized words, possibly with + or | separators, no CSS junk
-                if re.match(r'^[A-Z0-9][A-Z\s\'\-]+(?:\s+[A-Z0-9][A-Z\s\'\-]+)*$', line):
-                    if collecting_current:
-                        current_lines.append(line)
-                    elif collecting_next:
-                        next_lines.append(line)
-                    elif not collecting_current and not collecting_next and '|' not in line:  # Fallback for table rows
-                        if len(current_lines) < 3:
-                            current_lines.append(line)
-                        elif len(next_lines) < 3:
-                            next_lines.append(line)
+                if '|' in line:
+                    in_table = True
+                    parts = [p.strip() for p in line.split('|') if p.strip()]
 
-            if current_lines:
-                current = ' + '.join(current_lines)
-            if next_lines:
-                next_zone = ' + '.join(next_lines)
+                    if len(parts) >= 2:
+                        zone_text = parts[-1].strip()  # Last part is zones
 
-            # Final cleanup
-            current = re.sub(r'\s+', ' ', current).strip()
-            next_zone = re.sub(r'\s+', ' ', next_zone).strip()
-            if 'SPIDER FOREST' in current or 'STONY FIELD' in current:  # Known good
-                pass
-            elif len(current) < 10:
-                current = 'PENDING'
+                        if '---' in zone_text or 'DASH' in zone_text:
+                            separator_seen = True
+                            continue
+
+                        if zone_text and all(word[0].isupper() or word.isdigit() or "'" in word for word in zone_text.split()):
+                            if not separator_seen:
+                                current_zones.append(zone_text)
+                            else:
+                                next_zones.append(zone_text)
+
+            if current_zones:
+                current = ' + '.join(current_zones)
+            if next_zones:
+                next_zone = ' + '.join(next_zones)
+
+            print(f"DEBUG: Parsed current: {current}")
+            print(f"DEBUG: Parsed next: {next_zone}")
 
     except Exception as e:
-        print(f"Fetch error: {str(e)}")
+        print(f"ERROR: Fetch/parse failed - {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -86,7 +72,7 @@ def signature():
     if secs_to_next < 60:
         countdown = f"{secs_to_next} sec until next"
 
-    # Load bg and draw
+    # Image
     bg_path = 'bg.jpg'
     if not os.path.exists(bg_path):
         return "bg.jpg missing", 500
@@ -95,33 +81,33 @@ def signature():
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype('font.ttf', 14)
-        timer_font = ImageFont.truetype('font.ttf', 16)
+        font = ImageFont.truetype('font.ttf', 12)  # Smaller to prevent overflow
+        timer_font = ImageFont.truetype('font.ttf', 13)
     except:
         font = ImageFont.load_default()
         timer_font = font
 
     def draw_outlined_text(x, y, text, fill, font_obj):
-        for dx, dy in [(-2,-2),(-2,2),(2,-2),(2,2),(-1,-1),(-1,1),(1,-1),(1,1)]:
+        for dx, dy in [(-1,-1),(-1,1),(1,-1),(1,1)]:
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
         draw.text((x, y), text, fill=fill, font=font_obj)
 
-    y = 30
-    draw_outlined_text(10, y, "Current Zone:", "white", font)
-    y += 28
-    for part in [current[i:i+35] for i in range(0, len(current), 35)]:
-        draw_outlined_text(15, y, part, "white", font)
-        y += 22
+    y = 40  # Adjusted start
+    draw_outlined_text(10, y, "Current Zone:", (255, 255, 255), font)
+    y += 22
+    for part in [current[i:i+30] for i in range(0, len(current), 30)]:  # Tighter wrap
+        draw_outlined_text(15, y, part, (255, 255, 255), font)
+        y += 18
 
-    y += 15
+    y += 10
     draw_outlined_text(10, y, countdown, (255, 215, 0), timer_font)
-    y += 35
+    y += 25
 
-    draw_outlined_text(10, y, "Next Zone:", "white", font)
-    y += 28
-    for part in [next_zone[i:i+35] for i in range(0, len(next_zone), 35)]:
-        draw_outlined_text(15, y, part, "white", font)
-        y += 22
+    draw_outlined_text(10, y, "Next Zone:", (255, 255, 255), font)
+    y += 22
+    for part in [next_zone[i:i+30] for i in range(0, len(next_zone), 30)]:
+        draw_outlined_text(15, y, part, (255, 255, 255), font)
+        y += 18
 
     buf = BytesIO()
     img.save(buf, format='PNG')
