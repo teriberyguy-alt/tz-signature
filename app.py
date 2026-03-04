@@ -2,59 +2,72 @@ from flask import Flask, Response
 from PIL import Image, ImageDraw, ImageFont
 import requests
 from io import BytesIO
-import datetime
+from datetime import datetime, timezone
 import os
-from datetime import timezone
+import re
 
 app = Flask(__name__)
 
 @app.route('/signature.png')
 def signature():
-    # Fetch TZ data
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        r = requests.get('https://d2emu.com/tz', timeout=8)
+        r = requests.get('https://d2emu.com/tz', timeout=10)
         if r.status_code == 200:
             text = r.text.upper()
             lines = [line.strip() for line in text.splitlines() if line.strip()]
 
-            zones_blocks = []
+            print("DEBUG FETCH START ---")  # For Render logs
+            print(text[:800])  # Log first chunk to see what's coming
+            print("DEBUG FETCH END ---")
+
             current_block = []
+            next_block = []
+            collecting_current = True  # Assume first valid block is current
+            collecting_next = False
+
+            junk_keywords = ['GTAG', 'DATALAYER', 'FUNCTION', 'DIV', 'BUTTON', 'NAV', 'PROFILE', 'ICON', 'SCRIPT', 'NEW DATE', 'PUSH', 'GOOGLE']
 
             for line in lines:
-                # Skip obvious non-zone lines (headers, dashes, empty, short words, known junk)
-                if len(line) < 8 or 'TERROR' in line or 'ZONE' in line or 'IMMUN' in line or '-----' in line or line.startswith('#'):
-                    if current_block:
-                        zones_blocks.append(current_block)
-                        current_block = []
+                # Skip junk/script lines entirely
+                if any(kw in line for kw in junk_keywords) or re.search(r'[<{}(]', line) or len(line) < 8:
                     continue
 
-                # Likely a zone name: multiple words, capitalized, no ':' or buttons
+                # Look for zone-like lines: multiple capitalized words, no junk
                 words = line.split()
-                if len(words) >= 1 and all(w[0].isupper() or w.isdigit() for w in words if len(w) > 2):
-                    current_block.append(line)
+                if len(words) >= 2 and all(w[0].isupper() or w.isdigit() or '-' in w for w in words):
+                    # Check if it's a header (skip it)
+                    if 'TERROR' in line or 'ZONE' in line or 'IMMUN' in line or 'DATE' in line:
+                        if 'NEXT' in line:
+                            collecting_current = False
+                            collecting_next = True
+                        continue
+
+                    # Add to current or next block
+                    zone_str = ' '.join(words)
+                    if collecting_current:
+                        current_block.append(zone_str)
+                    elif collecting_next:
+                        next_block.append(zone_str)
 
             if current_block:
-                zones_blocks.append(current_block)
+                current = ' + '.join(current_block)
+            if next_block:
+                next_zone = ' + '.join(next_block)
 
-            # First block = current, second = next (common pattern on the page)
-            if len(zones_blocks) >= 1:
-                current = ' + '.join(zones_blocks[0])
-            if len(zones_blocks) >= 2:
-                next_zone = ' + '.join(zones_blocks[1])
-
-            # Fallback cleanup: if parsing grabbed junk, reset
-            if 'BUTTON' in current or 'NAV' in current or 'PROFILE' in current:
+            # Cleanup if junk slipped in
+            if len(current) < 10 or 'ERROR' in current:
                 current = 'PENDING'
-            if 'BUTTON' in next_zone or 'NAV' in next_zone or 'PROFILE' in next_zone:
+            if len(next_zone) < 10 or 'ERROR' in next_zone:
                 next_zone = 'PENDING'
 
-    except Exception:
+    except Exception as e:
+        print(f"Fetch failed: {e}")
         current = next_zone = 'FETCH ERROR'
 
-    # 30-minute countdown (to next :00 or :30 UTC)
-    now = datetime.datetime.now(timezone.utc)
+    # Countdown
+    now = datetime.now(timezone.utc)
     minutes = now.minute
     seconds = now.second
     mins_to_next = 30 - (minutes % 30)
@@ -62,10 +75,10 @@ def signature():
     if secs_to_next < 0:
         secs_to_next += 3600
     countdown = f"{secs_to_next // 60} min {secs_to_next % 60:02d} sec until next"
-    if secs_to_next <= 60:
+    if secs_to_next < 60:
         countdown = f"{secs_to_next} sec until next"
 
-    # Load background
+    # Load bg
     bg_path = 'bg.jpg'
     if not os.path.exists(bg_path):
         return "bg.jpg missing", 500
@@ -73,26 +86,23 @@ def signature():
     img = Image.open(bg_path).convert('RGBA')
     draw = ImageDraw.Draw(img)
 
-    # Try to load custom font, fallback to default
     try:
         font = ImageFont.truetype('font.ttf', 14)
         timer_font = ImageFont.truetype('font.ttf', 16)
-    except IOError:
+    except:
         font = ImageFont.load_default()
         timer_font = font
 
-    # Draw text with outline/shadow for readability
+    # Draw with outline
     def draw_outlined_text(x, y, text, fill, font_obj):
-        # Outline (black)
-        for dx, dy in [(-2, -2), (-2, 2), (2, -2), (2, 2), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+        for dx, dy in [(-2,-2),(-2,2),(2,-2),(2,2),(-1,-1),(-1,1),(1,-1),(1,1)]:
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
-        # Main text
         draw.text((x, y), text, fill=fill, font=font_obj)
 
     y = 30
     draw_outlined_text(10, y, "Current Zone:", "white", font)
     y += 28
-    for part in [current[i:i+38] for i in range(0, len(current), 38)]:
+    for part in [current[i:i+35] for i in range(0, len(current), 35)]:
         draw_outlined_text(15, y, part, "white", font)
         y += 22
 
@@ -102,11 +112,10 @@ def signature():
 
     draw_outlined_text(10, y, "Next Zone:", "white", font)
     y += 28
-    for part in [next_zone[i:i+38] for i in range(0, len(next_zone), 38)]:
+    for part in [next_zone[i:i+35] for i in range(0, len(next_zone), 35)]:
         draw_outlined_text(15, y, part, "white", font)
         y += 22
 
-    # Serve as PNG
     buf = BytesIO()
     img.save(buf, format='PNG')
     buf.seek(0)
