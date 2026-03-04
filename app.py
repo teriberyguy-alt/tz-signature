@@ -4,7 +4,6 @@ import requests
 from io import BytesIO
 from datetime import datetime, timezone
 import os
-import re
 
 app = Flask(__name__)
 
@@ -18,46 +17,47 @@ def signature():
             text = r.text.upper()
             lines = text.splitlines()
 
-            # Debug: Log relevant parts
-            print("DEBUG: Fetch status 200 - looking for table lines")
+            print("DEBUG: Fetch OK - scanning for | table")
 
             current_zones = []
             next_zones = []
-            in_table = False
             separator_seen = False
 
             for line in lines:
                 line = line.strip()
-                if not line:
+                if not line or '|' not in line:
                     continue
 
-                if '|' in line:
-                    in_table = True
-                    parts = [p.strip() for p in line.split('|') if p.strip()]
+                parts = [p.strip() for p in line.split('|') if p.strip()]
 
-                    if len(parts) >= 2:
-                        zone_text = parts[-1].strip()  # Last part is zones
+                if len(parts) < 2:
+                    continue
 
-                        if '---' in zone_text or 'DASH' in zone_text:
-                            separator_seen = True
-                            continue
+                zone_text = parts[-1]  # Last cell is the zones
 
-                        if zone_text and all(word[0].isupper() or word.isdigit() or "'" in word for word in zone_text.split()):
-                            if not separator_seen:
-                                current_zones.append(zone_text)
-                            else:
-                                next_zones.append(zone_text)
+                if '---' in zone_text or len(zone_text) < 5:
+                    separator_seen = True
+                    continue
+
+                # Clean zone text (remove extra spaces)
+                zone_text = ' '.join(zone_text.split())
+
+                if zone_text:
+                    if not separator_seen:
+                        current_zones.append(zone_text)
+                    else:
+                        next_zones.append(zone_text)
 
             if current_zones:
                 current = ' + '.join(current_zones)
             if next_zones:
                 next_zone = ' + '.join(next_zones)
 
-            print(f"DEBUG: Parsed current: {current}")
-            print(f"DEBUG: Parsed next: {next_zone}")
+            print(f"DEBUG parsed current: '{current}'")
+            print(f"DEBUG parsed next: '{next_zone}'")
 
     except Exception as e:
-        print(f"ERROR: Fetch/parse failed - {str(e)}")
+        print(f"ERROR: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -81,7 +81,7 @@ def signature():
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype('font.ttf', 12)  # Smaller to prevent overflow
+        font = ImageFont.truetype('font.ttf', 12)
         timer_font = ImageFont.truetype('font.ttf', 13)
     except:
         font = ImageFont.load_default()
@@ -92,18 +92,18 @@ def signature():
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
         draw.text((x, y), text, fill=fill, font=font_obj)
 
-    y = 40  # Adjusted start
-    draw_outlined_text(10, y, "Current Zone:", (255, 255, 255), font)
+    y = 45
+    draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
     y += 22
-    for part in [current[i:i+30] for i in range(0, len(current), 30)]:  # Tighter wrap
+    for part in [current[i:i+30] for i in range(0, len(current), 30)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
         y += 18
 
-    y += 10
+    y += 12
     draw_outlined_text(10, y, countdown, (255, 215, 0), timer_font)
-    y += 25
+    y += 28
 
-    draw_outlined_text(10, y, "Next Zone:", (255, 255, 255), font)
+    draw_outlined_text(10, y, "NEXT ZONE:", (255, 255, 255), font)
     y += 22
     for part in [next_zone[i:i+30] for i in range(0, len(next_zone), 30)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
