@@ -16,54 +16,62 @@ def signature():
         r = requests.get('https://d2emu.com/tz', timeout=10)
         if r.status_code == 200:
             text = r.text.upper()
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
 
-            print("DEBUG FETCH START ---")  # For Render logs
-            print(text[:800])  # Log first chunk to see what's coming
-            print("DEBUG FETCH END ---")
+            # Log raw fetch for debug (check Render logs)
+            print("DEBUG RAW FETCH START ---")
+            print(text[500:2000])  # Mid-page chunk to catch zones
+            print("DEBUG RAW FETCH END ---")
 
-            current_block = []
-            next_block = []
-            collecting_current = True  # Assume first valid block is current
+            # Remove script/style tags and junk to clean
+            text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<STYLE.*?</STYLE>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'\{[^}]*\}', '', text)  # Strip CSS blocks
+            text = re.sub(r'POSITION:|DISPLAY:|CURSOR:|VISIBILITY:|COLOR:|BACKGROUND:|TEXT-ALIGN:', '', text)
+
+            lines = [line.strip() for line in text.splitlines() if line.strip() and len(line) > 5]
+
+            collecting_current = False
             collecting_next = False
-
-            junk_keywords = ['GTAG', 'DATALAYER', 'FUNCTION', 'DIV', 'BUTTON', 'NAV', 'PROFILE', 'ICON', 'SCRIPT', 'NEW DATE', 'PUSH', 'GOOGLE']
+            current_lines = []
+            next_lines = []
 
             for line in lines:
-                # Skip junk/script lines entirely
-                if any(kw in line for kw in junk_keywords) or re.search(r'[<{}(]', line) or len(line) < 8:
+                if 'CURRENT TERROR ZONE' in line or 'CURRENT ZONE' in line:
+                    collecting_current = True
+                    collecting_next = False
+                    continue
+                if 'NEXT TERROR ZONE' in line or 'NEXT ZONE' in line:
+                    collecting_current = False
+                    collecting_next = True
                     continue
 
-                # Look for zone-like lines: multiple capitalized words, no junk
-                words = line.split()
-                if len(words) >= 2 and all(w[0].isupper() or w.isdigit() or '-' in w for w in words):
-                    # Check if it's a header (skip it)
-                    if 'TERROR' in line or 'ZONE' in line or 'IMMUN' in line or 'DATE' in line:
-                        if 'NEXT' in line:
-                            collecting_current = False
-                            collecting_next = True
-                        continue
-
-                    # Add to current or next block
-                    zone_str = ' '.join(words)
+                # Zone pattern: capitalized words, possibly with + or | separators, no CSS junk
+                if re.match(r'^[A-Z0-9][A-Z\s\'\-]+(?:\s+[A-Z0-9][A-Z\s\'\-]+)*$', line):
                     if collecting_current:
-                        current_block.append(zone_str)
+                        current_lines.append(line)
                     elif collecting_next:
-                        next_block.append(zone_str)
+                        next_lines.append(line)
+                    elif not collecting_current and not collecting_next and '|' not in line:  # Fallback for table rows
+                        if len(current_lines) < 3:
+                            current_lines.append(line)
+                        elif len(next_lines) < 3:
+                            next_lines.append(line)
 
-            if current_block:
-                current = ' + '.join(current_block)
-            if next_block:
-                next_zone = ' + '.join(next_block)
+            if current_lines:
+                current = ' + '.join(current_lines)
+            if next_lines:
+                next_zone = ' + '.join(next_lines)
 
-            # Cleanup if junk slipped in
-            if len(current) < 10 or 'ERROR' in current:
+            # Final cleanup
+            current = re.sub(r'\s+', ' ', current).strip()
+            next_zone = re.sub(r'\s+', ' ', next_zone).strip()
+            if 'SPIDER FOREST' in current or 'STONY FIELD' in current:  # Known good
+                pass
+            elif len(current) < 10:
                 current = 'PENDING'
-            if len(next_zone) < 10 or 'ERROR' in next_zone:
-                next_zone = 'PENDING'
 
     except Exception as e:
-        print(f"Fetch failed: {e}")
+        print(f"Fetch error: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -78,7 +86,7 @@ def signature():
     if secs_to_next < 60:
         countdown = f"{secs_to_next} sec until next"
 
-    # Load bg
+    # Load bg and draw
     bg_path = 'bg.jpg'
     if not os.path.exists(bg_path):
         return "bg.jpg missing", 500
@@ -93,7 +101,6 @@ def signature():
         font = ImageFont.load_default()
         timer_font = font
 
-    # Draw with outline
     def draw_outlined_text(x, y, text, fill, font_obj):
         for dx, dy in [(-2,-2),(-2,2),(2,-2),(2,2),(-1,-1),(-1,1),(1,-1),(1,1)]:
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
