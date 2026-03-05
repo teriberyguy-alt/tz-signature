@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 from datetime import datetime, timezone
 import os
+import re
 
 app = Flask(__name__)
 
@@ -12,53 +13,68 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        print("DEBUG: Image request started")
+        print("DEBUG: Request started")
         r = requests.get('https://d2emu.com/tz', timeout=10)
-        print(f"DEBUG: Fetch code = {r.status_code}")
+        print(f"DEBUG: Fetch status: {r.status_code}")
 
         if r.status_code == 200:
             text = r.text.upper()
+
+            # Skip script blocks entirely
+            text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'FUNCTION|WINDOW|VAR|LOCALSTORAGE|JSON|PARSE|ATOB|BTOA|NEW PROMISE|QUEUE', '', text, flags=re.IGNORECASE)
+
             lines = text.splitlines()
-            print("DEBUG: Lines fetched")
 
             current_zones = []
             next_zones = []
-            past_dash = False
+            past_separator = False
 
             for line in lines:
                 line = line.strip()
                 if '|' not in line:
                     continue
 
-                print(f"DEBUG row: {line}")
+                if any(kw in line for kw in ['SCRIPT', 'FUNCTION', 'WINDOW', 'VAR', 'DATALAYER', 'GTAG', 'NITROADS']):
+                    print(f"DEBUG: Skipping junk line with | : {line[:100]}...")
+                    continue
 
-                # Split and get zone part (after first two | )
-                if len(line.split('|')) > 2:
-                    zone_part = line.split('|')[2].strip()
-                    print(f"DEBUG zone part: '{zone_part}'")
+                print(f"DEBUG: Potential table row: {line}")
 
-                    if '---' in zone_part:
-                        past_dash = True
-                        print("DEBUG: Dash - next block")
-                        continue
+                parts = line.split('|')
+                if len(parts) < 3:
+                    continue
 
-                    if zone_part and len(zone_part) > 3:
-                        if not past_dash:
-                            current_zones.append(zone_part)
-                            print(f"DEBUG current add: {zone_part}")
-                        else:
-                            next_zones.append(zone_part)
-                            print(f"DEBUG next add: {zone_part}")
+                zone_part = parts[2].strip()
+
+                if not zone_part:
+                    continue
+
+                print(f"DEBUG: Zone part extracted: '{zone_part}'")
+
+                if '---' in zone_part:
+                    past_separator = True
+                    print("DEBUG: Separator found")
+                    continue
+
+                # Accept if it looks like zone (capital words, spaces)
+                if zone_part[0].isupper() and ' ' in zone_part:
+                    if not past_separator:
+                        current_zones.append(zone_part)
+                        print(f"DEBUG: Added to current: {zone_part}")
+                    else:
+                        next_zones.append(zone_part)
+                        print(f"DEBUG: Added to next: {zone_part}")
 
             if current_zones:
                 current = ' + '.join(current_zones)
-                print(f"DEBUG current final: {current}")
+                print(f"DEBUG: Final current: {current}")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-                print(f"DEBUG next final: {next_zone}")
+                print(f"DEBUG: Final next: {next_zone}")
 
     except Exception as e:
-        print(f"DEBUG error: {str(e)}")
+        print(f"ERROR: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -82,8 +98,8 @@ def signature():
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype('font.ttf', 10)
-        timer_font = ImageFont.truetype('font.ttf', 11)
+        font = ImageFont.truetype('font.ttf', 11)
+        timer_font = ImageFont.truetype('font.ttf', 12)
     except:
         font = ImageFont.load_default()
         timer_font = font
@@ -93,22 +109,22 @@ def signature():
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
         draw.text((x, y), text, fill=fill, font=font_obj)
 
-    y = 55
+    y = 50
     draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
-    y += 18
+    y += 20
     for part in [current[i:i+25] for i in range(0, len(current), 25)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
-        y += 15
+        y += 16
 
-    y += 5
+    y += 8
     draw_outlined_text(10, y, countdown, (255, 215, 0), timer_font)
-    y += 20
+    y += 22
 
     draw_outlined_text(10, y, "NEXT ZONE:", (255, 255, 255), font)
-    y += 18
+    y += 20
     for part in [next_zone[i:i+25] for i in range(0, len(next_zone), 25)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
-        y += 15
+        y += 16
 
     buf = BytesIO()
     img.save(buf, format='PNG')
