@@ -13,22 +13,20 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        print("DEBUG: Starting signature generation")
+        print("DEBUG: --- New request for signature.png ---")
         r = requests.get('https://d2emu.com/tz', timeout=10)
         print(f"DEBUG: Fetch status: {r.status_code}")
 
         if r.status_code == 200:
             text = r.text.upper()
 
-            # Aggressive clean: remove scripts, styles, CSS vars
+            # Clean junk
             text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
             text = re.sub(r'<STYLE.*?</STYLE>', '', text, flags=re.DOTALL | re.IGNORECASE)
             text = re.sub(r'\{[^}]*\}', '', text)
-            text = re.sub(r'WINDOW\.|DATALAYER|GTAG|SCRIPT|STYLE|POSITION:|DISPLAY:|CURSOR:|VISIBILITY:', '', text)
 
             lines = text.splitlines()
-            print("DEBUG: Cleaned text sample (first 10 lines):")
-            print('\n'.join(lines[:10]))
+            print("DEBUG: Looking for table lines with |")
 
             current_zones = []
             next_zones = []
@@ -39,7 +37,8 @@ def signature():
                 if '|' not in line:
                     continue
 
-                # Split and get cells after first empty |
+                print(f"DEBUG: Table line found: '{line}'")  # Log every table row
+
                 cells = [cell.strip() for cell in line.split('|') if cell.strip()]
 
                 if len(cells) == 0:
@@ -49,12 +48,12 @@ def signature():
 
                 if '---' in zone_str:
                     past_separator = True
-                    print("DEBUG: Separator detected")
+                    print("DEBUG: Separator row detected")
                     continue
 
-                # Validate zone: capitalized words, no junk
-                if zone_str and len(zone_str) > 5 and zone_str[0].isupper() and not any(k in zone_str for k in ['WINDOW', 'DATALAYER', 'GTAG', 'SCRIPT', 'STYLE', 'IMMUN', 'DATE']):
-                    print(f"DEBUG: Zone string captured: '{zone_str}'")
+                # Accept almost any reasonable zone string (multiple words, capitalized)
+                if len(zone_str.split()) >= 1 and not any(kw in zone_str for kw in ['IMMUN', 'DATE', 'TERROR', 'ZONE', 'WINDOW', 'DATALAYER', 'GTAG']):
+                    print(f"DEBUG: Captured potential zone: '{zone_str}'")
                     if not past_separator:
                         current_zones.append(zone_str)
                     else:
@@ -62,13 +61,13 @@ def signature():
 
             if current_zones:
                 current = ' + '.join(current_zones)
-                print(f"DEBUG: Final current: {current}")
+                print(f"DEBUG: Final current zones: {current}")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-                print(f"DEBUG: Final next: {next_zone}")
+                print(f"DEBUG: Final next zones: {next_zone}")
 
     except Exception as e:
-        print(f"ERROR during fetch/parse: {str(e)}")
+        print(f"ERROR: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -83,7 +82,7 @@ def signature():
     if secs_to_next < 60:
         countdown = f"{secs_to_next} sec until next"
 
-    # Image
+    # Image setup
     bg_path = 'bg.jpg'
     if not os.path.exists(bg_path):
         return "bg.jpg missing", 500
