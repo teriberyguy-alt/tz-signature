@@ -13,63 +13,62 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        print("DEBUG: Image request received")
+        print("DEBUG START: Image generation request")
         r = requests.get('https://d2emu.com/tz', timeout=10)
-        print(f"DEBUG: d2emu fetch status: {r.status_code}")
+        print(f"DEBUG: d2emu response code = {r.status_code}")
 
         if r.status_code == 200:
             text = r.text.upper()
+            print("DEBUG: Text fetched - length", len(text))
 
-            # Clean minimal junk
+            # Minimal clean
             text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
 
             lines = text.splitlines()
-            print("DEBUG: Searching for | table rows")
 
             current_zones = []
             next_zones = []
-            past_separator = False
+            past_dash = False
 
             for line in lines:
                 line = line.strip()
                 if '|' not in line:
                     continue
 
-                print(f"DEBUG: Raw row: {line}")
+                print(f"DEBUG ROW: {line}")
 
                 parts = line.split('|')
                 if len(parts) < 3:
                     continue
 
-                zone_cell = parts[2].strip()  # zones are in third part
+                zone_part = parts[2].strip()  # zones here
 
-                if not zone_cell:
-                    continue
+                if zone_part:
+                    print(f"DEBUG CELL: '{zone_part}'")
 
-                print(f"DEBUG: Zone cell: '{zone_cell}'")
+                    if '---' in zone_part:
+                        past_dash = True
+                        print("DEBUG: Dash separator - next zones incoming")
+                        continue
 
-                if '---' in zone_cell:
-                    past_separator = True
-                    print("DEBUG: --- separator - now next")
-                    continue
-
-                # Accept zone cells (spaces, capital words)
-                if len(zone_cell) > 5 and ' ' in zone_cell:
-                    print(f"DEBUG: Accepted zone: '{zone_cell}'")
-                    if not past_separator:
-                        current_zones.append(zone_cell)
-                    else:
-                        next_zones.append(zone_cell)
+                    # Accept if has spaces or looks like zone
+                    if ' ' in zone_part or len(zone_part.split()) > 0:
+                        if not past_dash:
+                            current_zones.append(zone_part)
+                            print(f"DEBUG: Current += '{zone_part}'")
+                        else:
+                            next_zones.append(zone_part)
+                            print(f"DEBUG: Next += '{zone_part}'")
 
             if current_zones:
                 current = ' + '.join(current_zones)
-                print(f"DEBUG: Current zones: {current}")
+                print(f"DEBUG FINAL CURRENT: {current}")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-                print(f"DEBUG: Next zones: {next_zone}")
+                print(f"DEBUG FINAL NEXT: {next_zone}")
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        print(f"DEBUG ERROR: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
