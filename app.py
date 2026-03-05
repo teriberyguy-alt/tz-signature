@@ -13,48 +13,47 @@ def signature():
     next_zone = 'PENDING'
     try:
         r = requests.get('https://d2emu.com/tz', timeout=10)
+        print(f"DEBUG: Fetch status: {r.status_code}")
         if r.status_code == 200:
             text = r.text.upper()
             lines = text.splitlines()
 
-            print("DEBUG: Fetch OK - scanning for | table")
-
             current_zones = []
             next_zones = []
-            separator_seen = False
+            past_separator = False
 
             for line in lines:
                 line = line.strip()
-                if not line or '|' not in line:
+                if '|' not in line:
                     continue
 
-                parts = [p.strip() for p in line.split('|') if p.strip()]
+                # Split on | and get cells (ignore empty first cell)
+                cells = [cell.strip() for cell in line.split('|') if cell.strip()]
 
-                if len(parts) < 2:
+                if len(cells) < 1:
                     continue
 
-                zone_text = parts[-1]  # Last cell is the zones
+                zone_str = ' '.join(cells).strip()  # Combine all cells after empty
 
-                if '---' in zone_text or len(zone_text) < 5:
-                    separator_seen = True
+                if '---' in zone_str:
+                    past_separator = True
+                    print("DEBUG: Separator row found")
                     continue
 
-                # Clean zone text (remove extra spaces)
-                zone_text = ' '.join(zone_text.split())
-
-                if zone_text:
-                    if not separator_seen:
-                        current_zones.append(zone_text)
+                if zone_str and len(zone_str) > 5 and not any(k in zone_str for k in ['IMMUN', 'DATE', 'TERROR', 'ZONE']):
+                    print(f"DEBUG: Found zone string: '{zone_str}'")
+                    if not past_separator:
+                        current_zones.append(zone_str)
                     else:
-                        next_zones.append(zone_text)
+                        next_zones.append(zone_str)
 
             if current_zones:
                 current = ' + '.join(current_zones)
             if next_zones:
                 next_zone = ' + '.join(next_zones)
 
-            print(f"DEBUG parsed current: '{current}'")
-            print(f"DEBUG parsed next: '{next_zone}'")
+            print(f"DEBUG final current: '{current}'")
+            print(f"DEBUG final next: '{next_zone}'")
 
     except Exception as e:
         print(f"ERROR: {str(e)}")
@@ -95,17 +94,17 @@ def signature():
     y = 45
     draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
     y += 22
-    for part in [current[i:i+30] for i in range(0, len(current), 30)]:
+    for part in [current[i:i+28] for i in range(0, len(current), 28)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
         y += 18
 
-    y += 12
+    y += 10
     draw_outlined_text(10, y, countdown, (255, 215, 0), timer_font)
-    y += 28
+    y += 25
 
     draw_outlined_text(10, y, "NEXT ZONE:", (255, 255, 255), font)
     y += 22
-    for part in [next_zone[i:i+30] for i in range(0, len(next_zone), 30)]:
+    for part in [next_zone[i:i+28] for i in range(0, len(next_zone), 28)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
         y += 18
 
