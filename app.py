@@ -13,20 +13,19 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        print("DEBUG: --- New request for signature.png ---")
+        print("DEBUG: --- NEW IMAGE REQUEST ---")
         r = requests.get('https://d2emu.com/tz', timeout=10)
-        print(f"DEBUG: Fetch status: {r.status_code}")
+        print(f"DEBUG: Status code from d2emu: {r.status_code}")
 
         if r.status_code == 200:
             text = r.text.upper()
 
-            # Clean junk
+            # Remove obvious junk
             text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
             text = re.sub(r'<STYLE.*?</STYLE>', '', text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r'\{[^}]*\}', '', text)
 
             lines = text.splitlines()
-            print("DEBUG: Looking for table lines with |")
+            print("DEBUG: Found lines with | :")
 
             current_zones = []
             next_zones = []
@@ -37,37 +36,44 @@ def signature():
                 if '|' not in line:
                     continue
 
-                print(f"DEBUG: Table line found: '{line}'")  # Log every table row
+                print(f"DEBUG raw row: {line}")
 
-                cells = [cell.strip() for cell in line.split('|') if cell.strip()]
-
-                if len(cells) == 0:
+                parts = line.split('|')
+                if len(parts) < 3:
                     continue
 
-                zone_str = ' '.join(cells)
+                zone_cell = parts[2].strip()  # The zones are in the third part (after | empty | zones)
 
-                if '---' in zone_str:
+                if not zone_cell:
+                    continue
+
+                print(f"DEBUG extracted cell: '{zone_cell}'")
+
+                if '---' in zone_cell:
                     past_separator = True
-                    print("DEBUG: Separator row detected")
+                    print("DEBUG: Separator seen - switching to next")
                     continue
 
-                # Accept almost any reasonable zone string (multiple words, capitalized)
-                if len(zone_str.split()) >= 1 and not any(kw in zone_str for kw in ['IMMUN', 'DATE', 'TERROR', 'ZONE', 'WINDOW', 'DATALAYER', 'GTAG']):
-                    print(f"DEBUG: Captured potential zone: '{zone_str}'")
+                # Accept if it's likely zones (capital letters, spaces, no junk keywords)
+                if len(zone_cell.split()) > 1 and zone_cell[0].isupper() and not any(kw in zone_cell for kw in ['IMMUN', 'DATE', 'TERROR', 'ZONE']):
+                    print(f"DEBUG: Accepted zone: '{zone_cell}'")
                     if not past_separator:
-                        current_zones.append(zone_str)
+                        current_zones.append(zone_cell)
                     else:
-                        next_zones.append(zone_str)
+                        next_zones.append(zone_cell)
 
             if current_zones:
                 current = ' + '.join(current_zones)
-                print(f"DEBUG: Final current zones: {current}")
+                print(f"DEBUG: Current set to: {current}")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-                print(f"DEBUG: Final next zones: {next_zone}")
+                print(f"DEBUG: Next set to: {next_zone}")
+
+            if current == 'PENDING' and current_zones:
+                print("DEBUG: Warning - current still PENDING but zones found")
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        print(f"ERROR: Problem during fetch or parse: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -82,7 +88,7 @@ def signature():
     if secs_to_next < 60:
         countdown = f"{secs_to_next} sec until next"
 
-    # Image setup
+    # Load bg and draw
     bg_path = 'bg.jpg'
     if not os.path.exists(bg_path):
         return "bg.jpg missing", 500
@@ -91,8 +97,8 @@ def signature():
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype('font.ttf', 11)
-        timer_font = ImageFont.truetype('font.ttf', 12)
+        font = ImageFont.truetype('font.ttf', 10)  # Even smaller to fit long names
+        timer_font = ImageFont.truetype('font.ttf', 11)
     except:
         font = ImageFont.load_default()
         timer_font = font
@@ -102,22 +108,22 @@ def signature():
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
         draw.text((x, y), text, fill=fill, font=font_obj)
 
-    y = 50
+    y = 55
     draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
-    y += 20
-    for part in [current[i:i+26] for i in range(0, len(current), 26)]:
+    y += 18
+    for part in [current[i:i+24] for i in range(0, len(current), 24)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
-        y += 16
+        y += 15
 
-    y += 8
+    y += 5
     draw_outlined_text(10, y, countdown, (255, 215, 0), timer_font)
-    y += 22
+    y += 20
 
     draw_outlined_text(10, y, "NEXT ZONE:", (255, 255, 255), font)
-    y += 20
-    for part in [next_zone[i:i+26] for i in range(0, len(next_zone), 26)]:
+    y += 18
+    for part in [next_zone[i:i+24] for i in range(0, len(next_zone), 24)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
-        y += 16
+        y += 15
 
     buf = BytesIO()
     img.save(buf, format='PNG')
