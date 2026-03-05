@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 from datetime import datetime, timezone
 import os
+import re
 
 app = Flask(__name__)
 
@@ -12,11 +13,20 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
+        print("DEBUG: Request received for /signature.png")
         r = requests.get('https://d2emu.com/tz', timeout=10)
-        print(f"DEBUG: Fetch status: {r.status_code}")
+        print(f"DEBUG: Fetch status code: {r.status_code}")
+
         if r.status_code == 200:
-            text = r.text.upper()
-            lines = text.splitlines()
+            raw_text = r.text.upper()
+
+            # Strip script/style to remove junk like datalayer/gtag
+            raw_text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', raw_text, flags=re.DOTALL | re.IGNORECASE)
+            raw_text = re.sub(r'<STYLE.*?</STYLE>', '', raw_text, flags=re.DOTALL | re.IGNORECASE)
+            raw_text = re.sub(r'\{[^}]*\}', '', raw_text)  # CSS blocks
+
+            lines = raw_text.splitlines()
+            print("DEBUG: Scanning lines for table rows")
 
             current_zones = []
             next_zones = []
@@ -27,21 +37,21 @@ def signature():
                 if '|' not in line:
                     continue
 
-                # Split on | and get cells (ignore empty first cell)
-                cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+                # Get cells after first empty |
+                cells = [cell.strip() for cell in line.split('|')[1:] if cell.strip()]
 
-                if len(cells) < 1:
+                if not cells:
                     continue
 
-                zone_str = ' '.join(cells).strip()  # Combine all cells after empty
+                zone_str = ' '.join(cells)
 
-                if '---' in zone_str:
+                if '---' in zone_str or len(zone_str) < 6:
                     past_separator = True
-                    print("DEBUG: Separator row found")
+                    print("DEBUG: Found separator row")
                     continue
 
-                if zone_str and len(zone_str) > 5 and not any(k in zone_str for k in ['IMMUN', 'DATE', 'TERROR', 'ZONE']):
-                    print(f"DEBUG: Found zone string: '{zone_str}'")
+                if zone_str and not any(kw in zone_str for kw in ['IMMUN', 'DATE', 'TERROR', 'ZONE', 'WINDOW', 'DATALAYER', 'SCRIPT', 'STYLE']):
+                    print(f"DEBUG: Valid zone string found: '{zone_str}'")
                     if not past_separator:
                         current_zones.append(zone_str)
                     else:
@@ -49,14 +59,13 @@ def signature():
 
             if current_zones:
                 current = ' + '.join(current_zones)
+                print(f"DEBUG: Set current to '{current}'")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-
-            print(f"DEBUG final current: '{current}'")
-            print(f"DEBUG final next: '{next_zone}'")
+                print(f"DEBUG: Set next to '{next_zone}'")
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        print(f"ERROR: Fetch or parse failed - {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -80,8 +89,8 @@ def signature():
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype('font.ttf', 12)
-        timer_font = ImageFont.truetype('font.ttf', 13)
+        font = ImageFont.truetype('font.ttf', 11)  # Smaller to fit
+        timer_font = ImageFont.truetype('font.ttf', 12)
     except:
         font = ImageFont.load_default()
         timer_font = font
@@ -91,22 +100,22 @@ def signature():
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
         draw.text((x, y), text, fill=fill, font=font_obj)
 
-    y = 45
+    y = 50
     draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
-    y += 22
-    for part in [current[i:i+28] for i in range(0, len(current), 28)]:
+    y += 20
+    for part in [current[i:i+26] for i in range(0, len(current), 26)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
-        y += 18
+        y += 16
 
-    y += 10
+    y += 8
     draw_outlined_text(10, y, countdown, (255, 215, 0), timer_font)
-    y += 25
+    y += 22
 
     draw_outlined_text(10, y, "NEXT ZONE:", (255, 255, 255), font)
-    y += 22
-    for part in [next_zone[i:i+28] for i in range(0, len(next_zone), 28)]:
+    y += 20
+    for part in [next_zone[i:i+26] for i in range(0, len(next_zone), 26)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
-        y += 18
+        y += 16
 
     buf = BytesIO()
     img.save(buf, format='PNG')
