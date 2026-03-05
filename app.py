@@ -13,19 +13,18 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        print("DEBUG: --- NEW IMAGE REQUEST ---")
+        print("DEBUG: Image request received")
         r = requests.get('https://d2emu.com/tz', timeout=10)
-        print(f"DEBUG: Status code from d2emu: {r.status_code}")
+        print(f"DEBUG: d2emu fetch status: {r.status_code}")
 
         if r.status_code == 200:
             text = r.text.upper()
 
-            # Remove obvious junk
+            # Clean minimal junk
             text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r'<STYLE.*?</STYLE>', '', text, flags=re.DOTALL | re.IGNORECASE)
 
             lines = text.splitlines()
-            print("DEBUG: Found lines with | :")
+            print("DEBUG: Searching for | table rows")
 
             current_zones = []
             next_zones = []
@@ -36,26 +35,26 @@ def signature():
                 if '|' not in line:
                     continue
 
-                print(f"DEBUG raw row: {line}")
+                print(f"DEBUG: Raw row: {line}")
 
                 parts = line.split('|')
                 if len(parts) < 3:
                     continue
 
-                zone_cell = parts[2].strip()  # The zones are in the third part (after | empty | zones)
+                zone_cell = parts[2].strip()  # zones are in third part
 
                 if not zone_cell:
                     continue
 
-                print(f"DEBUG extracted cell: '{zone_cell}'")
+                print(f"DEBUG: Zone cell: '{zone_cell}'")
 
                 if '---' in zone_cell:
                     past_separator = True
-                    print("DEBUG: Separator seen - switching to next")
+                    print("DEBUG: --- separator - now next")
                     continue
 
-                # Accept if it's likely zones (capital letters, spaces, no junk keywords)
-                if len(zone_cell.split()) > 1 and zone_cell[0].isupper() and not any(kw in zone_cell for kw in ['IMMUN', 'DATE', 'TERROR', 'ZONE']):
+                # Accept zone cells (spaces, capital words)
+                if len(zone_cell) > 5 and ' ' in zone_cell:
                     print(f"DEBUG: Accepted zone: '{zone_cell}'")
                     if not past_separator:
                         current_zones.append(zone_cell)
@@ -64,16 +63,13 @@ def signature():
 
             if current_zones:
                 current = ' + '.join(current_zones)
-                print(f"DEBUG: Current set to: {current}")
+                print(f"DEBUG: Current zones: {current}")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-                print(f"DEBUG: Next set to: {next_zone}")
-
-            if current == 'PENDING' and current_zones:
-                print("DEBUG: Warning - current still PENDING but zones found")
+                print(f"DEBUG: Next zones: {next_zone}")
 
     except Exception as e:
-        print(f"ERROR: Problem during fetch or parse: {str(e)}")
+        print(f"ERROR: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -88,7 +84,7 @@ def signature():
     if secs_to_next < 60:
         countdown = f"{secs_to_next} sec until next"
 
-    # Load bg and draw
+    # Image
     bg_path = 'bg.jpg'
     if not os.path.exists(bg_path):
         return "bg.jpg missing", 500
@@ -97,7 +93,7 @@ def signature():
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype('font.ttf', 10)  # Even smaller to fit long names
+        font = ImageFont.truetype('font.ttf', 10)
         timer_font = ImageFont.truetype('font.ttf', 11)
     except:
         font = ImageFont.load_default()
@@ -111,7 +107,7 @@ def signature():
     y = 55
     draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
     y += 18
-    for part in [current[i:i+24] for i in range(0, len(current), 24)]:
+    for part in [current[i:i+25] for i in range(0, len(current), 25)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
         y += 15
 
@@ -121,7 +117,7 @@ def signature():
 
     draw_outlined_text(10, y, "NEXT ZONE:", (255, 255, 255), font)
     y += 18
-    for part in [next_zone[i:i+24] for i in range(0, len(next_zone), 24)]:
+    for part in [next_zone[i:i+25] for i in range(0, len(next_zone), 25)]:
         draw_outlined_text(15, y, part, (255, 255, 255), font)
         y += 15
 
