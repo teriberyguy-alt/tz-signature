@@ -13,20 +13,22 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        print("DEBUG: Request received for /signature.png")
+        print("DEBUG: Starting signature generation")
         r = requests.get('https://d2emu.com/tz', timeout=10)
-        print(f"DEBUG: Fetch status code: {r.status_code}")
+        print(f"DEBUG: Fetch status: {r.status_code}")
 
         if r.status_code == 200:
-            raw_text = r.text.upper()
+            text = r.text.upper()
 
-            # Strip script/style to remove junk like datalayer/gtag
-            raw_text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', raw_text, flags=re.DOTALL | re.IGNORECASE)
-            raw_text = re.sub(r'<STYLE.*?</STYLE>', '', raw_text, flags=re.DOTALL | re.IGNORECASE)
-            raw_text = re.sub(r'\{[^}]*\}', '', raw_text)  # CSS blocks
+            # Aggressive clean: remove scripts, styles, CSS vars
+            text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<STYLE.*?</STYLE>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'\{[^}]*\}', '', text)
+            text = re.sub(r'WINDOW\.|DATALAYER|GTAG|SCRIPT|STYLE|POSITION:|DISPLAY:|CURSOR:|VISIBILITY:', '', text)
 
-            lines = raw_text.splitlines()
-            print("DEBUG: Scanning lines for table rows")
+            lines = text.splitlines()
+            print("DEBUG: Cleaned text sample (first 10 lines):")
+            print('\n'.join(lines[:10]))
 
             current_zones = []
             next_zones = []
@@ -37,21 +39,22 @@ def signature():
                 if '|' not in line:
                     continue
 
-                # Get cells after first empty |
-                cells = [cell.strip() for cell in line.split('|')[1:] if cell.strip()]
+                # Split and get cells after first empty |
+                cells = [cell.strip() for cell in line.split('|') if cell.strip()]
 
-                if not cells:
+                if len(cells) == 0:
                     continue
 
                 zone_str = ' '.join(cells)
 
-                if '---' in zone_str or len(zone_str) < 6:
+                if '---' in zone_str:
                     past_separator = True
-                    print("DEBUG: Found separator row")
+                    print("DEBUG: Separator detected")
                     continue
 
-                if zone_str and not any(kw in zone_str for kw in ['IMMUN', 'DATE', 'TERROR', 'ZONE', 'WINDOW', 'DATALAYER', 'SCRIPT', 'STYLE']):
-                    print(f"DEBUG: Valid zone string found: '{zone_str}'")
+                # Validate zone: capitalized words, no junk
+                if zone_str and len(zone_str) > 5 and zone_str[0].isupper() and not any(k in zone_str for k in ['WINDOW', 'DATALAYER', 'GTAG', 'SCRIPT', 'STYLE', 'IMMUN', 'DATE']):
+                    print(f"DEBUG: Zone string captured: '{zone_str}'")
                     if not past_separator:
                         current_zones.append(zone_str)
                     else:
@@ -59,13 +62,13 @@ def signature():
 
             if current_zones:
                 current = ' + '.join(current_zones)
-                print(f"DEBUG: Set current to '{current}'")
+                print(f"DEBUG: Final current: {current}")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-                print(f"DEBUG: Set next to '{next_zone}'")
+                print(f"DEBUG: Final next: {next_zone}")
 
     except Exception as e:
-        print(f"ERROR: Fetch or parse failed - {str(e)}")
+        print(f"ERROR during fetch/parse: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
@@ -89,7 +92,7 @@ def signature():
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype('font.ttf', 11)  # Smaller to fit
+        font = ImageFont.truetype('font.ttf', 11)
         timer_font = ImageFont.truetype('font.ttf', 12)
     except:
         font = ImageFont.load_default()
