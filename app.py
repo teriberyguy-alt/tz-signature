@@ -4,7 +4,6 @@ import requests
 from io import BytesIO
 from datetime import datetime, timezone
 import os
-import re
 
 app = Flask(__name__)
 
@@ -13,18 +12,14 @@ def signature():
     current = 'PENDING'
     next_zone = 'PENDING'
     try:
-        print("DEBUG START: Image generation request")
+        print("DEBUG: Image request started")
         r = requests.get('https://d2emu.com/tz', timeout=10)
-        print(f"DEBUG: d2emu response code = {r.status_code}")
+        print(f"DEBUG: Fetch code = {r.status_code}")
 
         if r.status_code == 200:
             text = r.text.upper()
-            print("DEBUG: Text fetched - length", len(text))
-
-            # Minimal clean
-            text = re.sub(r'<SCRIPT.*?</SCRIPT>', '', text, flags=re.DOTALL | re.IGNORECASE)
-
             lines = text.splitlines()
+            print("DEBUG: Lines fetched")
 
             current_zones = []
             next_zones = []
@@ -35,40 +30,35 @@ def signature():
                 if '|' not in line:
                     continue
 
-                print(f"DEBUG ROW: {line}")
+                print(f"DEBUG row: {line}")
 
-                parts = line.split('|')
-                if len(parts) < 3:
-                    continue
-
-                zone_part = parts[2].strip()  # zones here
-
-                if zone_part:
-                    print(f"DEBUG CELL: '{zone_part}'")
+                # Split and get zone part (after first two | )
+                if len(line.split('|')) > 2:
+                    zone_part = line.split('|')[2].strip()
+                    print(f"DEBUG zone part: '{zone_part}'")
 
                     if '---' in zone_part:
                         past_dash = True
-                        print("DEBUG: Dash separator - next zones incoming")
+                        print("DEBUG: Dash - next block")
                         continue
 
-                    # Accept if has spaces or looks like zone
-                    if ' ' in zone_part or len(zone_part.split()) > 0:
+                    if zone_part and len(zone_part) > 3:
                         if not past_dash:
                             current_zones.append(zone_part)
-                            print(f"DEBUG: Current += '{zone_part}'")
+                            print(f"DEBUG current add: {zone_part}")
                         else:
                             next_zones.append(zone_part)
-                            print(f"DEBUG: Next += '{zone_part}'")
+                            print(f"DEBUG next add: {zone_part}")
 
             if current_zones:
                 current = ' + '.join(current_zones)
-                print(f"DEBUG FINAL CURRENT: {current}")
+                print(f"DEBUG current final: {current}")
             if next_zones:
                 next_zone = ' + '.join(next_zones)
-                print(f"DEBUG FINAL NEXT: {next_zone}")
+                print(f"DEBUG next final: {next_zone}")
 
     except Exception as e:
-        print(f"DEBUG ERROR: {str(e)}")
+        print(f"DEBUG error: {str(e)}")
         current = next_zone = 'FETCH ERROR'
 
     # Countdown
