@@ -18,41 +18,40 @@ def signature():
     countdown = 'PENDING'
 
     try:
-        # Fetch d2tz image (larger for better OCR)
         tz_url = "https://api.d2tz.info/public/tz_image?t=none&width=600"
         r = requests.get(tz_url, timeout=15)
         if r.status_code != 200:
-            print(f"DEBUG: d2tz fetch failed, status {r.status_code}")
+            print(f"DEBUG: d2tz fetch failed: {r.status_code}")
         else:
-            tz_img_bytes = r.content
+            tz_img = Image.open(BytesIO(r.content)).convert('RGB')
 
-            # Open and pre-process
-            tz_img = Image.open(BytesIO(tz_img_bytes)).convert('RGB')
-
-            # Crop to text area (top ~70% of image)
+            # Crop to text-heavy area (top 60%)
             width, height = tz_img.size
-            tz_img = tz_img.crop((0, 0, width, int(height * 0.7)))
+            crop_height = int(height * 0.6)
+            tz_img = tz_img.crop((0, 0, width, crop_height))
 
-            # Enhance contrast
+            # Enhance contrast and sharpness
             enhancer = ImageEnhance.Contrast(tz_img)
+            tz_img = enhancer.enhance(3.0)  # stronger
+            enhancer = ImageEnhance.Sharpness(tz_img)
             tz_img = enhancer.enhance(2.0)
 
-            # Convert to OpenCV format for further processing
+            # To OpenCV for thresholding
             tz_cv = cv2.cvtColor(np.array(tz_img), cv2.COLOR_RGB2BGR)
             gray = cv2.cvtColor(tz_cv, cv2.COLOR_BGR2GRAY)
-            # Threshold to make text pop
-            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            # Adaptive threshold for dark bg/light text
+            thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
 
-            # OCR on processed image
-            custom_config = r'--oem 3 --psm 6'  # Assume single uniform block of text
-            full_text = pytesseract.image_to_string(thresh, config=custom_config).upper()
+            # OCR with tuned config
+            custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ,:;'
+            full_text = pytesseract.image_to_string(thresh, config=custom_config).upper().strip()
 
-            print("DEBUG: OCR full text:")
-            print(full_text[:1000])  # Log first chunk
+            print("DEBUG: OCR full extracted text (first 1000 chars):")
+            print(full_text[:1000])
 
-            # Extract
-            current_match = re.search(r'CURRENT ZONE:\s*([^N]+?)(?=NEXT ZONE|$)', full_text, re.IGNORECASE | re.DOTALL)
-            next_match = re.search(r'NEXT ZONE:\s*(.+?)(?=\s*\d+ MIN|\s*\d+ SEC|$)', full_text, re.IGNORECASE | re.DOTALL)
+            # Extract with better regex (handle commas, line breaks)
+            current_match = re.search(r'CURRENT ZONE:[\s:]*([\w\s,]+?)(?=NEXT ZONE|$)', full_text, re.IGNORECASE | re.DOTALL)
+            next_match = re.search(r'NEXT ZONE:[\s:]*([\w\s,]+?)(?=\s*\d+|$)', full_text, re.IGNORECASE | re.DOTALL)
             countdown_match = re.search(r'(\d+ MIN \d+ SEC UNTIL NEXT|\d+ SEC UNTIL NEXT)', full_text, re.IGNORECASE)
 
             if current_match:
@@ -78,7 +77,7 @@ def signature():
         if secs_to_next < 60:
             countdown = f"{secs_to_next} sec until next"
 
-    # Load your bg.jpg (title and Guy_T are baked in)
+    # Your bg.jpg (title/watermark baked in)
     bg_path = 'bg.jpg'
     if not os.path.exists(bg_path):
         return "bg.jpg missing", 500
@@ -94,11 +93,11 @@ def signature():
         timer_font = font
 
     def draw_outlined_text(x, y, text, fill, font_obj):
-        for dx, dy in [(-1,-1), (-1,1), (1,-1), (1,1)]:
+        for dx, dy in [(-1,-1),(-1,1),(1,-1),(1,1)]:
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
         draw.text((x, y), text, fill=fill, font=font_obj)
 
-    y = 45  # Adjust starting y to fit your bg (move down if title is high)
+    y = 45  # Tweak this if text overlaps your bg title
     draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
     y += 22
     for part in [current[i:i+30] for i in range(0, len(current), 30)]:
