@@ -2,3 +2,4 @@ flask
 pillow
 requests
 pytesseract
+opencv-python-headless  # For image pre-processing
