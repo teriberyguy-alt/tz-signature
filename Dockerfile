@@ -1,9 +1,9 @@
 FROM python:3.12-slim
 
+# Install only what's truly needed for Tesseract + pytesseract
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
-    libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
