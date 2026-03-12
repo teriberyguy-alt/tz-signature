@@ -1,11 +1,5 @@
 FROM python:3.12-slim
 
-# Install only what's truly needed for Tesseract + pytesseract
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    libtesseract-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY requirements.txt .
