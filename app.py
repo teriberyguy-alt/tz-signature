@@ -12,7 +12,6 @@ import time
 
 app = Flask(__name__)
 
-# Simple cache (60 sec refresh)
 cache = {'text': None, 'timestamp': 0}
 
 @app.route('/signature.png')
@@ -26,26 +25,27 @@ def signature():
     start_time = time.time()
 
     try:
-        # Cache check
         if cache['text'] and (time.time() - cache['timestamp'] < 60):
             full_text = cache['text']
-            print("DEBUG: Using cached OCR")
+            print("DEBUG: Using cache")
         else:
-            tz_url = "https://api.d2tz.info/public/tz_image?t=none&width=450"  # Slightly larger but still fast
+            tz_url = "https://api.d2tz.info/public/tz_image?t=none&width=500"
             r = requests.get(tz_url, timeout=10)
             if r.status_code != 200:
-                print(f"DEBUG: Fetch failed - {r.status_code}")
-                raise Exception("Fetch failed")
+                raise Exception(f"Fetch failed: {r.status_code}")
 
             tz_img = Image.open(BytesIO(r.content)).convert('RGB')
 
-            # Crop to top 65% to capture both zones
+            # Upscale slightly for better OCR accuracy
+            tz_img = tz_img.resize((tz_img.width * 2, tz_img.height * 2), Image.LANCZOS)
+
+            # Crop to top 75% to include next zone
             width, height = tz_img.size
-            tz_img = tz_img.crop((0, 0, width, int(height * 0.65)))
+            tz_img = tz_img.crop((0, 0, width, int(height * 0.75)))
 
             # Contrast + invert
             enhancer = ImageEnhance.Contrast(tz_img)
-            tz_img = enhancer.enhance(3.5)
+            tz_img = enhancer.enhance(4.0)
             tz_img = ImageOps.invert(tz_img)
 
             # Threshold
@@ -53,25 +53,38 @@ def signature():
             gray = cv2.cvtColor(tz_cv, cv2.COLOR_BGR2GRAY)
             thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
-            # OCR config
-            config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,:; '
+            # OCR with single column + whitelist
+            config = r'--oem 3 --psm 4 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,:; '
             full_text = pytesseract.image_to_string(thresh, config=config).upper().strip()
+
+            # Post-process: fix common OCR errors
+            full_text = full_text.replace('Ø', 'O').replace('UTER', 'OUTER').replace('PDS', ' OF DES').replace('MAUSØLEUM', 'MAUSOLEUM')
+            full_text = re.sub(r'([A-Z])([A-Z]{3,})', r'\1 \2', full_text)  # Force space after single letter
+            full_text = re.sub(r'([A-Z]),([A-Z])', r'\1, \2', full_text)  # Space after comma
 
             cache['text'] = full_text
             cache['timestamp'] = time.time()
 
-            print("DEBUG: Fresh OCR - full text:")
+            print("DEBUG: Fresh OCR (processed):")
             print(full_text)
 
-        # Improved regex (more flexible for misreads/cutoffs)
-        current_match = re.search(r'CURRENT\s*ZONE[:\s]*([A-Z0-9\s,]+?)(?=NEXT\s*ZONE|MAUSOLEUM|$)', full_text, re.IGNORECASE | re.DOTALL | re.MULTILINE)
-        next_match = re.search(r'NEXT\s*ZONE[:\s]*([A-Z0-9\s,]+?)(?=\s*\d+|$)', full_text, re.IGNORECASE | re.DOTALL | re.MULTILINE)
-        countdown_match = re.search(r'(\d+\s*MIN\s*\d+\s*SEC\s*UNTIL\s*NEXT|\d+\s*SEC\s*UNTIL\s*NEXT)', full_text, re.IGNORECASE)
-
+        # Parse current zone
+        current_match = re.search(r'CURRENT\s*ZONE[:\s]*([A-Z0-9\s,]+?)(?=NEXT\s*ZONE|$)', full_text, re.IGNORECASE | re.DOTALL | re.MULTILINE)
         if current_match:
-            current = current_match.group(1).strip().replace('\n', ' ').replace('  ', ' ').replace('Ø', 'O')
+            current = current_match.group(1).strip().replace('\n', ' ').replace('  ', ' ')
+
+        # Parse next zone
+        next_match = re.search(r'NEXT\s*ZONE[:\s]*([A-Z0-9\s,]+?)(?=\s*\d+|$)', full_text, re.IGNORECASE | re.DOTALL | re.MULTILINE)
         if next_match:
-            next_zone = next_match.group(1).strip().replace('\n', ' ').replace('  ', ' ').replace('Ø', 'O')
+            next_zone = next_match.group(1).strip().replace('\n', ' ').replace('  ', ' ')
+        else:
+            # Fallback if regex misses - look for anything after "NEXT ZONE"
+            next_part = re.search(r'NEXT\s*ZONE[:\s]*(.+)', full_text, re.IGNORECASE | re.DOTALL)
+            if next_part:
+                next_zone = next_part.group(1).strip().replace('\n', ' ').replace('  ', ' ')[:60] + '...'
+
+        # Countdown
+        countdown_match = re.search(r'(\d+\s*MIN\s*\d+\s*SEC\s*UNTIL\s*NEXT|\d+\s*SEC\s*UNTIL\s*NEXT)', full_text, re.IGNORECASE)
         if countdown_match:
             countdown = countdown_match.group(1).strip()
 
@@ -91,7 +104,7 @@ def signature():
         if secs_to_next < 60:
             countdown = f"{secs_to_next} SEC UNTIL NEXT"
 
-    print(f"DEBUG: Parsed values - current: '{current}' | next: '{next_zone}' | countdown: '{countdown}'")
+    print(f"DEBUG: Final parsed - current: '{current}' | next: '{next_zone}' | countdown: '{countdown}'")
     print(f"DEBUG: Generation time: {time.time() - start_time:.2f} sec")
 
     bg_path = 'bg.jpg'
@@ -113,8 +126,8 @@ def signature():
             draw.text((x + dx, y + dy), text, font=font_obj, fill="black")
         draw.text((x, y), text, fill=fill, font=font_obj)
 
-    # Adjusted positions + wider wrap (45 chars) to fit long names
-    y = 45   # Start point - tweak if overlapping bg title
+    # Positions - tweak y if needed
+    y = 45
     draw_outlined_text(10, y, "CURRENT ZONE:", (255, 255, 255), font)
     y += 22
     for part in [current[i:i+45] for i in range(0, len(current), 45)]:
@@ -135,7 +148,7 @@ def signature():
     img.save(buf, format='PNG')
     buf.seek(0)
 
-    print("DEBUG: Image ready")
+    print("DEBUG: Image sent")
     return Response(buf, mimetype='image/png', headers={'Cache-Control': 'no-cache, no-store'})
 
 if __name__ == '__main__':
